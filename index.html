@@ -1413,8 +1413,15 @@ function openAddCostModal(projId){
 // ── CONFIG STORAGE (Google Sheet) ──────────────────────────────────────────
 function getConfig(key){return DB.configCache[key]||null;}
 async function setConfigAsync(key,val){
+  console.log('setConfigAsync:', key, 'val length:', val.length, 'val:', val);
   DB.configCache[key]=val;
-  await apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)});
+  try {
+    const result = await apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)});
+    console.log('setConfigAsync response:', result);
+  } catch(e) {
+    console.error('setConfigAsync error:', e);
+    throw e;
+  }
 }
 function getMonthlyClientsConfig(){return getConfig('monthlyClients')||[];}
 async function setMonthlyClientsConfig(list){await setConfigAsync('monthlyClients',list);}
@@ -1565,10 +1572,15 @@ function addManualFixedCostModal(){
   `,async()=>{
     const desc=document.getElementById('mf_mdesc').value.trim();
     const amt=parseFloat(document.getElementById('mf_mamt').value)||0;
+    console.log('Adding manual fixed cost:', {desc, amt});
     if(!desc||!amt){toast('Compila descrizione e importo','error');return;}
     const list=getFixedCostsConfig();
+    console.log('Current list before push:', list);
     list.push({id:uid(),tipo:'manual',importo:amt,descrizione:desc});
+    console.log('List after push:', list);
+    console.log('About to save config with:', list);
     await setFixedCostsConfig(list);
+    console.log('Config saved, now closing modal and rendering');
     closeModal();render();editFixedCosts();
   },'Aggiungi');
 }

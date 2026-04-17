@@ -376,6 +376,7 @@ function readGoals() {
 }
 
 function setConfigValue(chiave, valore) {
+  Logger.log('setConfigValue: ' + chiave + ' = ' + String(valore).substring(0, 100));
   setConfig(chiave, valore);
   return { ok: true };
 }
