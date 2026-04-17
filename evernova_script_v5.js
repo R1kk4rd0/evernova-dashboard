@@ -6,13 +6,14 @@ const QONTO_LOGIN  = 'evernova-s-r-l-7827';
 const QONTO_SECRET = 'd362a4469134a57dd08d518fde14768b';
 
 const SHEET_NAMES = {
-  clienti:  'Clienti',
-  fatture:  'Fatture',
-  progetti: 'Progetti',
-  costi:    'CostiProgetto',
-  spese:    'Spese',
-  fornitori:'Fornitori',
-  config:   'Config',
+  clienti:     'Clienti',
+  fatture:     'Fatture',
+  progetti:    'Progetti',
+  costi:       'CostiProgetto',
+  spese:       'Spese',
+  fornitori:   'Fornitori',
+  fornProgetti:'FornitoriProgetti',
+  config:      'Config',
 };
 
 const QONTO_BASE = 'https://thirdparty.qonto.com/v2';
@@ -40,6 +41,8 @@ function handleRequest(e, method) {
     else if (action === 'deleteExpense')  result = deleteRow(SHEET_NAMES.spese,   body.id);
     else if (action === 'saveForn')       result = saveRow(SHEET_NAMES.fornitori, body, fornitoriHeaders());
     else if (action === 'deleteForn')     result = deleteRow(SHEET_NAMES.fornitori, body.id);
+    else if (action === 'saveFornProg')   result = saveRow(SHEET_NAMES.fornProgetti, body, fornProgettiHeaders());
+    else if (action === 'deleteFornProg') result = deleteRow(SHEET_NAMES.fornProgetti, body.id);
     else if (action === 'saveGoals')      result = saveGoals(body.goals);
     else if (action === 'assignExpense')  result = assignExpenseToProject(body);
     else result = { error: 'Azione non riconosciuta: ' + action };
@@ -57,8 +60,9 @@ function readAll() {
     progetti:  sheetToObjects(SHEET_NAMES.progetti),
     costi:     sheetToObjects(SHEET_NAMES.costi),
     spese:     sheetToObjects(SHEET_NAMES.spese),
-    fornitori: sheetToObjects(SHEET_NAMES.fornitori),
-    goals:     readGoals(),
+    fornitori:    sheetToObjects(SHEET_NAMES.fornitori),
+    fornProgetti: sheetToObjects(SHEET_NAMES.fornProgetti),
+    goals:        readGoals(),
     saldo:     getSaldo(),
     lastSync:  getConfig('lastQontoSync'),
   };
@@ -213,10 +217,21 @@ function syncFatture() {
 
 function syncSpese(iban) {
   let importate = 0;
-  const existing    = sheetToObjects(SHEET_NAMES.spese);
-  const existingIds = new Set(existing.map(r => String(r.qontoId||'')).filter(Boolean));
-  const fornitori   = sheetToObjects(SHEET_NAMES.fornitori);
-  const fornByNome  = new Map(fornitori.map(f => [normalizeNome(f.nome||''), f]).filter(([k]) => k));
+  const existing      = sheetToObjects(SHEET_NAMES.spese);
+  const existingIds   = new Set(existing.map(r => String(r.qontoId||'')).filter(Boolean));
+  const fornitori     = sheetToObjects(SHEET_NAMES.fornitori);
+  const fornByNome    = new Map(fornitori.map(f => [normalizeNome(f.nome||''), f]).filter(([k]) => k));
+  const progetti      = sheetToObjects(SHEET_NAMES.progetti);
+  const progettiAttivi= new Set(progetti.filter(p => p.stato === 'active').map(p => String(p.id)));
+  const fornProgs     = sheetToObjects(SHEET_NAMES.fornProgetti);
+  // fornitoreId → list of active progettoIds linked to that fornitore
+  const fornToProj    = new Map();
+  fornProgs.forEach(fp => {
+    const fid = String(fp.fornitoreId), pid = String(fp.progettoId);
+    if (!progettiAttivi.has(pid)) return;
+    if (!fornToProj.has(fid)) fornToProj.set(fid, []);
+    fornToProj.get(fid).push(pid);
+  });
 
   let nextPage = null, pageCount = 0;
   do {
@@ -231,6 +246,9 @@ function syncSpese(iban) {
       if (existingIds.has(tx.id)) return;
       const fornKey = normalizeNome(tx.counterpart_name||tx.label||'');
       const forn = fornByNome.get(fornKey) || matchFornitore(fornKey, fornitori);
+      const fornId = forn ? String(forn.id) : '';
+      const linkedProjs = fornId ? (fornToProj.get(fornId) || []) : [];
+      const autoProj = linkedProjs.length === 1 ? linkedProjs[0] : '';
       appendRow(SHEET_NAMES.spese, {
         id: 'Q_TX_' + tx.id, qontoId: tx.id,
         descrizione: tx.label || tx.reference || 'Transazione',
@@ -238,7 +256,7 @@ function syncSpese(iban) {
         categoriaQonto: tx.category || '',
         importo: (tx.amount_cents || 0) / 100,
         data: (tx.settled_at || tx.emitted_at || '').split('T')[0],
-        progettoId: '', fornitoreId: forn ? String(forn.id) : '',
+        progettoId: autoProj, fornitoreId: fornId,
         fonte: 'qonto',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }, expenseHeaders());
@@ -436,8 +454,9 @@ function ensureSheets() {
   setupSheet(SHEET_NAMES.progetti,  projectHeaders());
   setupSheet(SHEET_NAMES.costi,     costHeaders());
   setupSheet(SHEET_NAMES.spese,     expenseHeaders());
-  setupSheet(SHEET_NAMES.fornitori, fornitoriHeaders());
-  setupSheet(SHEET_NAMES.config,    ['chiave', 'valore']);
+  setupSheet(SHEET_NAMES.fornitori,    fornitoriHeaders());
+  setupSheet(SHEET_NAMES.fornProgetti, fornProgettiHeaders());
+  setupSheet(SHEET_NAMES.config,       ['chiave', 'valore']);
 }
 function setupSheet(name, headers) {
   const sheet = getSheet(name);
@@ -453,7 +472,8 @@ function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','
 function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
 function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt']; }
 function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fonte','createdAt','updatedAt','fornitoreId']; }
-function fornitoriHeaders() { return ['id','nome','categoria','email','tel','tariffa','note','createdAt','updatedAt']; }
+function fornitoriHeaders()   { return ['id','nome','categoria','email','tel','tariffa','note','createdAt','updatedAt']; }
+function fornProgettiHeaders(){ return ['id','fornitoreId','progettoId','ruolo','note','createdAt','updatedAt']; }
 
 function syncBeneficiari() {
   const existing = sheetToObjects(SHEET_NAMES.fornitori);

@@ -231,7 +231,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 </div>
 <script>
 const API='https://script.google.com/macros/s/AKfycbyYt69mZlnb4E8WSu_vfitohkijiMr2OVAoh3FmERGEE9mMU28zDAIINDJq-0nVJJYIsw/exec';
-let DB={clienti:[],fatture:[],progetti:[],costi:[],spese:[],fornitori:[],goals:[],saldo:{balance:0}};
+let DB={clienti:[],fatture:[],progetti:[],costi:[],spese:[],fornitori:[],fornProgetti:[],goals:[],saldo:{balance:0}};
 let currentPage='overview',detailCtx={type:null,id:null},invFilter='all';
 let selectMode=false,selectedClients=new Set();
 let filters={clients:{q:''},invoices:{q:'',anno:''},expenses:{q:'',anno:'',cat:''},projects:{q:'',stato:''}};
@@ -268,6 +268,8 @@ const projCosts=id=>DB.costi.filter(c=>String(c.progettoId)===String(id));
 const fornSpese=id=>DB.spese.filter(e=>String(e.fornitoreId)===String(id));
 const projCostTotal=id=>projCosts(id).reduce((s,c)=>s+Number(c.importo||0),0);
 const projMargin=p=>Number(p.budget||0)-projCostTotal(p.id);
+const fornProgettiByForn=id=>DB.fornProgetti.filter(fp=>String(fp.fornitoreId)===String(id));
+const fornProgettiByProj=id=>DB.fornProgetti.filter(fp=>String(fp.progettoId)===String(id));
 
 function getStatoEffettivo(inv){
   if(!inv)return'draft';
@@ -299,6 +301,7 @@ async function loadAll(){
     DB.fatture=(data.fatture||[]).sort((a,b)=>(b.data||'').localeCompare(a.data||''));DB.progetti=data.progetti||[];
     DB.costi=data.costi||[];DB.spese=data.spese||[];
     DB.fornitori=data.fornitori||[];
+    DB.fornProgetti=data.fornProgetti||[];
     DB.goals=data.goals||[];DB.saldo=data.saldo||{balance:0};
     setConn('live','Qonto connesso');return true;
   }catch(e){setConn('error','Errore connessione');toast('Errore: '+e.message,'error');return false;}
@@ -919,6 +922,26 @@ function renderProjectDetail(id,c){
       <div class="section-divider" style="margin-top:16px">Note</div>
       <textarea class="notes-area" placeholder="Obiettivi, deliverable..." onblur="saveProjNotes('${id}',this.value)">${p.note||''}</textarea>
     </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><div class="card-title">Fornitori collegati</div><button class="btn-ghost" style="font-size:12px" onclick="openLinkFornProgModal('${id}')">+ Collega fornitore</button></div>
+    ${(()=>{
+      const links=fornProgettiByProj(id);
+      if(!links.length)return '<div style="font-size:13px;color:var(--text3)">Nessun fornitore collegato a questo progetto.</div>';
+      return links.map(fp=>{
+        const f=DB.fornitori.find(x=>String(x.id)===String(fp.fornitoreId));
+        if(!f)return '';
+        const [bg,fg]=avatarColor(f.nome||'');
+        return \`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div class="avatar" style="background:\${bg};color:\${fg};width:34px;height:34px;font-size:12px;border-radius:8px;flex-shrink:0">\${initials(f.nome||'')}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500">\${f.nome}</div>
+            <div style="font-size:11px;color:var(--text3)">\${fp.ruolo||f.categoria||''}</div>
+          </div>
+          <span onclick="delFornProg('\${fp.id}','${id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>
+        </div>\`;
+      }).join('');
+    })()}
   </div>`;
 }
 async function delCost(costId,projId){await del('deleteCost',costId);showDetail('project',projId);}
@@ -1024,6 +1047,26 @@ function openLinkFornModal(expId){
     }
   );
 }
+function openLinkFornProgModal(projId){
+  const p=DB.progetti.find(x=>String(x.id)===String(projId));
+  if(!p)return;
+  const already=fornProgettiByProj(projId).map(fp=>String(fp.fornitoreId));
+  const opts=DB.fornitori.filter(f=>!already.includes(String(f.id))).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+  if(!opts){toast('Tutti i fornitori sono già collegati a questo progetto.');return;}
+  openModal('Collega fornitore',p.nome,
+    `<div class="modal-field"><label>Fornitore</label><select id="mf_fpforn"><option value="">— seleziona —</option>${opts}</select></div>
+     <div class="modal-field"><label>Ruolo (opzionale)</label><input id="mf_fpruolo" placeholder="es. Cameraman, Post-produzione..."></div>
+     <div class="modal-field"><label>Note</label><textarea id="mf_fpnote" style="min-height:50px"></textarea></div>`,
+    async function(){
+      const fornId=document.getElementById('mf_fpforn').value;
+      if(!fornId)return;
+      await save('saveFornProg',{id:uid(),fornitoreId:fornId,progettoId:projId,ruolo:document.getElementById('mf_fpruolo').value,note:document.getElementById('mf_fpnote').value});
+      closeModal();showDetail('project',projId);
+    }
+  );
+}
+async function delFornProg(fpId,projId){await del('deleteFornProg',fpId);showDetail('project',projId);}
+
 async function addExpense(){const d=document.getElementById('eDesc')?.value.trim(),a=parseFloat(document.getElementById('eAmt')?.value),cat=document.getElementById('eCat')?.value;if(!d||!a)return;await save('saveExpense',{id:uid(),descrizione:d,importo:a,categoria:cat,data:new Date().toISOString().split('T')[0],fonte:'manuale'});render();}
 async function delExp(id){await del('deleteExpense',id);render();}
 async function delInvAndClose(id){closeModal();await del('deleteInvoice',id);render();}
@@ -1141,6 +1184,19 @@ function showFornDetail(id){
           <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(e.importo)}</div>
         </div>`).join('')}
     </div>`:'<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">Nessuna transazione collegata.<br><span style="font-size:11px">Fai un Sync Qonto per collegare le spese ai fornitori.</span></div>'}
+    ${(()=>{
+      const links=fornProgettiByForn(id);
+      if(!links.length)return '<div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);margin:14px 0 8px">Progetti</div><div style="font-size:13px;color:var(--text3)">Nessun progetto collegato.</div>';
+      return '<div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);margin:14px 0 8px">Progetti</div>'+
+        links.map(fp=>{
+          const proj=DB.progetti.find(x=>String(x.id)===String(fp.progettoId));
+          if(!proj)return '';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1"><div style="font-size:13px;font-weight:500">${proj.nome}</div><div style="font-size:11px;color:var(--text3)">${fp.ruolo||''}</div></div>
+            ${projBadge[proj.stato]||''}
+          </div>`;
+        }).join('');
+    })()}
     <div style="display:flex;gap:8px;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
       <button class="btn-ghost" style="flex:1" onclick="closeModal();openEditFornModal('${id}')">✎ Modifica</button>
       <button class="btn-danger" style="flex:1" onclick="closeModal();deleteForn('${id}')">Elimina</button>
