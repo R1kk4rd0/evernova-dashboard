@@ -227,8 +227,7 @@ function syncSpese(iban) {
       if (tx.category === 'treasury_and_interco') return;
       if (existingIds.has(tx.id)) return;
       const fornKey = normalizeNome(tx.counterpart_name||tx.label||'');
-      const forn = fornByNome.get(fornKey) || 
-        fornitori.find(f => normalizeNome(f.nome||'').includes(fornKey.substring(0,8)) && fornKey.length > 5);
+      const forn = fornByNome.get(fornKey) || matchFornitore(fornKey, fornitori);
       appendRow(SHEET_NAMES.spese, {
         id: 'Q_TX_' + tx.id, qontoId: tx.id,
         descrizione: tx.label || tx.reference || 'Transazione',
@@ -285,6 +284,39 @@ function extractNome(obj) {
 
 function normalizeNome(nome) {
   return (nome || '').toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function stripLegalSuffix(nome) {
+  return nome
+    .replace(/\b(s ?r ?l ?s?|s ?p ?a|s ?n ?c|s ?a ?s|ltd|limited|gmbh|ag|bv|inc|llc|s ?a|nv|plc|oy|ab)\b/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function matchFornitore(descNorm, fornitori) {
+  const descClean = stripLegalSuffix(descNorm);
+  let best = null, bestScore = 0;
+  for (const f of fornitori) {
+    const fornNorm = normalizeNome(f.nome || '');
+    const fornClean = stripLegalSuffix(fornNorm);
+    if (!fornClean || fornClean.length < 3) continue;
+    // Exact
+    if (descNorm === fornNorm) return f;
+    // Bidirectional substring (cleaned)
+    if (descClean.includes(fornClean) || fornClean.includes(descClean)) {
+      const score = fornClean.length;
+      if (score > bestScore) { best = f; bestScore = score; }
+      continue;
+    }
+    // Token overlap — any word >3 chars in common
+    const descTokens = descClean.split(' ').filter(t => t.length > 3);
+    const fornTokens = fornClean.split(' ').filter(t => t.length > 3);
+    for (const dt of descTokens) {
+      for (const ft of fornTokens) {
+        if (dt === ft && dt.length > bestScore) { best = f; bestScore = dt.length; }
+      }
+    }
+  }
+  return bestScore >= 4 ? best : null;
 }
 
 function mapStato(s) {
@@ -488,6 +520,28 @@ function fixJoin() {
     }
   }
   Logger.log('Fix join: ' + fixed + ' fatture collegate');
+}
+
+function linkSpeseFornitori() {
+  const fornitori = sheetToObjects(SHEET_NAMES.fornitori);
+  const sheet     = getSheet(SHEET_NAMES.spese);
+  const rows      = sheet.getDataRange().getValues();
+  const headers   = rows[0];
+  const fornIdCol = headers.indexOf('fornitoreId');
+  const descCol   = headers.indexOf('descrizione');
+  let linked = 0, skipped = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][fornIdCol] || '').trim()) { skipped++; continue; }
+    const desc = normalizeNome(String(rows[i][descCol] || ''));
+    if (!desc) continue;
+    const forn = matchFornitore(desc, fornitori);
+    if (forn) {
+      sheet.getRange(i + 1, fornIdCol + 1).setValue(forn.id);
+      linked++;
+    }
+  }
+  Logger.log('linkSpeseFornitori — collegate: ' + linked + ' | già collegate: ' + skipped + ' | totale: ' + (rows.length - 1));
+  return { linked, skipped };
 }
 
 function debugFattureRecenti() {
