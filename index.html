@@ -386,7 +386,7 @@ function renderOverview(c){
     <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Margine netto</div><div class="kpi-icon" style="background:#F3E8FF"><svg viewBox="0 0 16 16" fill="none"><path d="M3 13l3-4 3 2 4-6" stroke="#9333EA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><div class="kpi-value">${fmtEur(incassato-speseTot)}</div><div class="kpi-footer"><span class="kpi-delta ${incassato-speseTot>=0?'pos':'neg'}">${incassato>0?Math.round((incassato-speseTot)/incassato*100):0}%</span><span class="kpi-footer-label">Incassato - Spese</span></div></div>
   </div>
   <div class="charts-row">
-    <div class="card"><div class="card-header"><div><div class="card-title">Revenue per cliente</div><div class="card-sub">Fatture pagate</div></div></div><div style="position:relative;height:220px"><canvas id="revChart"></canvas></div></div>
+    <div class="card"><div class="card-header"><div><div class="card-title">Revenue per cliente</div><div class="card-sub">Fatture pagate</div></div></div><div style="position:relative;height:260px"><canvas id="revChart"></canvas></div></div>
     <div class="card"><div class="card-header"><div><div class="card-title">Obiettivi</div><div class="card-sub">Clicca per aggiornare</div></div></div><div id="goalsEl"></div></div>
   </div>
   <div class="two-col">
@@ -413,7 +413,8 @@ function renderOverview(c){
 
   const byClient={};DB.fatture.filter(i=>getStatoEffettivo(i)==='paid').forEach(i=>{const n=i.clienteNome||clientName(i.clienteId);byClient[n]=(byClient[n]||0)+Number(i.importo||0);});
   const sorted=Object.entries(byClient).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if(sorted.length){charts.rev=new Chart(document.getElementById('revChart'),{type:'bar',data:{labels:sorted.map(e=>e[0]),datasets:[{data:sorted.map(e=>e[1]),backgroundColor:'#4F46E5',borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},color:'#9CA3AF',maxRotation:30},grid:{display:false},border:{display:false}},y:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+v.toLocaleString('it-IT')},grid:{color:'#F3F4F6'},border:{display:false}}}}});}
+  const trunc=(s,n=24)=>s.length>n?s.substring(0,n)+'…':s;
+  if(sorted.length){charts.rev=new Chart(document.getElementById('revChart'),{type:'bar',data:{labels:sorted.map(e=>trunc(e[0])),datasets:[{data:sorted.map(e=>e[1]),backgroundColor:'#4F46E5',borderRadius:[0,6,6,0],borderSkipped:false,barThickness:22}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtEur(ctx.raw)}}},scales:{x:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+Number(v).toLocaleString('it-IT')},grid:{color:'#F3F4F6'},border:{display:false}},y:{ticks:{font:{size:12,weight:'500'},color:'#374151'},grid:{display:false},border:{display:false}}}}});}
 }
 
 // ── INVOICES ─────────────────────────────────────────────────
