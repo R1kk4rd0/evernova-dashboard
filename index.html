@@ -1333,7 +1333,42 @@ function openNewInvoiceModal(){openModal('Nuova fattura','',`<div class="modal-f
 function openNewInvoiceForClient(clientId){openModal('Nuova fattura',clientName(clientId),`<div class="modal-field"><label>Descrizione</label><input id="mf_idesc"></div><div class="modal-row"><div class="modal-field"><label>Importo €</label><input id="mf_iamt" type="number"></div><div class="modal-field"><label>Stato</label><select id="mf_istatus"><option value="draft">Bozza</option><option value="pending">In attesa</option><option value="paid">Pagata</option></select></div></div>`,async()=>{const a=parseFloat(document.getElementById('mf_iamt').value),d=document.getElementById('mf_idesc').value.trim();if(!a||!d)return;await save('saveInvoice',{id:uid(),clienteId:clientId,clienteNome:clientName(clientId),descrizione:d,importo:a,stato:document.getElementById('mf_istatus').value,data:new Date().toISOString().split('T')[0],fonte:'manuale'});closeModal();showDetail('client',clientId);});}
 function openNewProjectModal(){openModal('Nuovo progetto','',`<div class="modal-field"><label>Nome</label><input id="mf_pname"></div><div class="modal-row"><div class="modal-field"><label>Cliente</label><select id="mf_pclient">${DB.clienti.map(c=>`<option value="${c.id}">${getNome(c)}</option>`).join('')}</select></div><div class="modal-field"><label>Tipo</label><select id="mf_ptype"><option>Video</option><option>AI/CRM</option><option>Video retainer</option><option>Altro</option></select></div></div><div class="modal-row"><div class="modal-field"><label>Budget €</label><input id="mf_pbudget" type="number"></div><div class="modal-field"><label>Stato</label><select id="mf_pstatus"><option value="proposal">Proposta</option><option value="active">Attivo</option><option value="paused">In pausa</option></select></div></div><div class="modal-row"><div class="modal-field"><label>Data inizio</label><input id="mf_pstart" type="date" value="${new Date().toISOString().split('T')[0]}"></div><div class="modal-field"><label>Data fine</label><input id="mf_pend" type="date"></div></div><div class="modal-field"><label>Note</label><textarea id="mf_pnotes"></textarea></div>`,async()=>{const nome=document.getElementById('mf_pname').value.trim();if(!nome)return;await save('saveProject',{id:uid(),nome,clienteId:document.getElementById('mf_pclient').value,tipo:document.getElementById('mf_ptype').value,stato:document.getElementById('mf_pstatus').value,dataInizio:document.getElementById('mf_pstart').value,dataFine:document.getElementById('mf_pend').value,budget:parseFloat(document.getElementById('mf_pbudget').value)||0,avanzamento:0,responsabile:'Riccardo',note:document.getElementById('mf_pnotes').value});closeModal();render();});}
 function openEditProjectModal(id){const p=DB.progetti.find(x=>String(x.id)===String(id));if(!p)return;openModal('Modifica progetto',p.nome,`<div class="modal-row"><div class="modal-field"><label>Budget €</label><input id="mf_pbudget" type="number" value="${p.budget||0}"></div><div class="modal-field"><label>Stato</label><select id="mf_pstatus"><option value="proposal" ${p.stato==='proposal'?'selected':''}>Proposta</option><option value="active" ${p.stato==='active'?'selected':''}>Attivo</option><option value="paused" ${p.stato==='paused'?'selected':''}>In pausa</option><option value="done" ${p.stato==='done'?'selected':''}>Completato</option></select></div></div><div class="modal-row"><div class="modal-field"><label>Avanzamento %</label><input id="mf_pprog" type="number" min="0" max="100" value="${p.avanzamento||0}"></div><div class="modal-field"><label>Data fine</label><input id="mf_pend" type="date" value="${p.dataFine||''}"></div></div>`,async()=>{p.budget=parseFloat(document.getElementById('mf_pbudget').value)||p.budget;p.stato=document.getElementById('mf_pstatus').value;p.avanzamento=parseInt(document.getElementById('mf_pprog').value)||p.avanzamento;p.dataFine=document.getElementById('mf_pend').value;await save('saveProject',p);closeModal();showDetail('project',id);});}
-function openAddCostModal(projId){openModal('Aggiungi costo','',`<div class="modal-field"><label>Descrizione</label><input id="mf_cdesc"></div><div class="modal-row"><div class="modal-field"><label>Importo €</label><input id="mf_camt" type="number"></div><div class="modal-field"><label>Categoria</label><select id="mf_ccat"><option value="Trasferta">Trasferta</option><option value="noleggio">Noleggio</option><option value="software">Software</option><option value="Collaboratori">Collaboratori</option><option value="Altro">Altro</option></select></div></div><div class="modal-field"><label>Data</label><input id="mf_cdate" type="date" value="${new Date().toISOString().split('T')[0]}"></div>`,async()=>{const desc=document.getElementById('mf_cdesc').value.trim(),amt=parseFloat(document.getElementById('mf_camt').value);if(!desc||!amt)return;await save('saveCost',{id:uid(),progettoId:projId,descrizione:desc,categoria:document.getElementById('mf_ccat').value,importo:amt,data:document.getElementById('mf_cdate').value});closeModal();showDetail('project',projId);});}
+function openAddCostModal(projId){
+  const fornOpts=DB.fornitori.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+  openModal('Aggiungi costo','',`
+    <div class="modal-field"><label>Fornitore (opzionale)</label>
+      <select id="mf_cforn" onchange="(function(){const f=DB.fornitori.find(x=>String(x.id)===document.getElementById('mf_cforn').value);if(f){document.getElementById('mf_cdesc').value=f.nome;document.getElementById('mf_ccat').value=f.categoria&&['Trasferta','Noleggio','Software','Collaboratori','Altro'].includes(f.categoria)?f.categoria:'Collaboratori';}})()">
+        <option value="">— nessuno —</option>${fornOpts}
+      </select>
+    </div>
+    <div class="modal-field"><label>Descrizione</label><input id="mf_cdesc"></div>
+    <div class="modal-row">
+      <div class="modal-field"><label>Importo €</label><input id="mf_camt" type="number"></div>
+      <div class="modal-field"><label>Categoria</label><select id="mf_ccat">
+        <option value="Collaboratori">Collaboratori</option>
+        <option value="Trasferta">Trasferta</option>
+        <option value="Noleggio">Noleggio</option>
+        <option value="Software">Software</option>
+        <option value="Altro">Altro</option>
+      </select></div>
+    </div>
+    <div class="modal-field"><label>Data</label><input id="mf_cdate" type="date" value="${new Date().toISOString().split('T')[0]}"></div>`,
+  async()=>{
+    const desc=document.getElementById('mf_cdesc').value.trim();
+    const amt=parseFloat(document.getElementById('mf_camt').value);
+    if(!desc||!amt)return;
+    const fornId=document.getElementById('mf_cforn').value;
+    await save('saveCost',{id:uid(),progettoId:projId,descrizione:desc,categoria:document.getElementById('mf_ccat').value,importo:amt,data:document.getElementById('mf_cdate').value});
+    // se fornitore selezionato e non già collegato al progetto, crea il link
+    if(fornId){
+      const giaCollegato=fornProgettiByProj(projId).some(fp=>String(fp.fornitoreId)===String(fornId));
+      if(!giaCollegato){
+        await save('saveFornProg',{id:uid(),fornitoreId:fornId,progettoId:projId,ruolo:'',note:''});
+      }
+    }
+    closeModal();showDetail('project',projId);
+  });
+}
 function editGoal(i){const g=DB.goals[i];openModal('Aggiorna obiettivo',g.label,`<div class="modal-row"><div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div><div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;await save('saveGoals',{goals:DB.goals});closeModal();render();});}
 
 async function saveClientNotes(id,val){const cl=clientById(id);if(cl){cl.note=val;await save('saveClient',cl);}}
