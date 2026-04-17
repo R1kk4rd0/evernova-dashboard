@@ -44,6 +44,7 @@ function handleRequest(e, method) {
     else if (action === 'saveFornProg')   result = saveRow(SHEET_NAMES.fornProgetti, body, fornProgettiHeaders());
     else if (action === 'deleteFornProg') result = deleteRow(SHEET_NAMES.fornProgetti, body.id);
     else if (action === 'saveGoals')      result = saveGoals(body.goals);
+    else if (action === 'setConfigValue')  result = setConfigValue(body.chiave, body.valore);
     else if (action === 'assignExpense')  result = assignExpenseToProject(body);
     else result = { error: 'Azione non riconosciuta: ' + action };
     return jsonResponse(result);
@@ -62,6 +63,7 @@ function readAll() {
     spese:     sheetToObjects(SHEET_NAMES.spese),
     fornitori:    sheetToObjects(SHEET_NAMES.fornitori),
     fornProgetti: sheetToObjects(SHEET_NAMES.fornProgetti),
+    config:    sheetToObjects(SHEET_NAMES.config),
     goals:        readGoals(),
     saldo:     getSaldo(),
     lastSync:  getConfig('lastQontoSync'),
@@ -371,6 +373,11 @@ function readGoals() {
     { label:'Lead qualificati',  current:0, target:5 },
   ];
   try { return JSON.parse(raw); } catch(e) { return []; }
+}
+
+function setConfigValue(chiave, valore) {
+  setConfig(chiave, valore);
+  return { ok: true };
 }
 
 function saveRow(sheetName, data, headers) {

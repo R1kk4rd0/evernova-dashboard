@@ -231,7 +231,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 </div>
 <script>
 const API='https://script.google.com/macros/s/AKfycbyYt69mZlnb4E8WSu_vfitohkijiMr2OVAoh3FmERGEE9mMU28zDAIINDJq-0nVJJYIsw/exec';
-let DB={clienti:[],fatture:[],progetti:[],costi:[],spese:[],fornitori:[],fornProgetti:[],goals:[],saldo:{balance:0}};
+let DB={clienti:[],fatture:[],progetti:[],costi:[],spese:[],fornitori:[],fornProgetti:[],goals:[],saldo:{balance:0},configCache:{}};
 let currentPage='overview',detailCtx={type:null,id:null},invFilter='all';
 let selectMode=false,selectedClients=new Set();
 let filters={clients:{q:''},invoices:{q:'',anno:''},expenses:{q:'',anno:'',cat:''},projects:{q:'',stato:''}};
@@ -304,6 +304,9 @@ async function loadAll(){
     DB.fornitori=data.fornitori||[];
     DB.fornProgetti=data.fornProgetti||[];
     DB.goals=data.goals||[];DB.saldo=data.saldo||{balance:0};
+    const config=data.config||[];
+    DB.configCache={};
+    config.forEach(c=>{try{DB.configCache[c.chiave]=JSON.parse(c.valore);}catch(e){DB.configCache[c.chiave]=c.valore;}});
     setConn('live','Qonto connesso');return true;
   }catch(e){setConn('error','Errore connessione');toast('Errore: '+e.message,'error');return false;}
 }
@@ -1407,15 +1410,18 @@ function openAddCostModal(projId){
     closeModal();showDetail('project',projId);
   });
 }
-// ── CONFIG STORAGE ──────────────────────────────────────────
-function getConfig(key){const raw=localStorage.getItem('evernova_'+key);return raw?JSON.parse(raw):null;}
-function setConfig(key,val){localStorage.setItem('evernova_'+key,JSON.stringify(val));}
+// ── CONFIG STORAGE (Google Sheet) ──────────────────────────────────────────
+function getConfig(key){return DB.configCache[key]||null;}
+function setConfigAsync(key,val){
+  DB.configCache[key]=val;
+  apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)}).catch(e=>console.error('Config save error:',e));
+}
 function getMonthlyClientsConfig(){return getConfig('monthlyClients')||[];}
-function setMonthlyClientsConfig(list){setConfig('monthlyClients',list);}
+function setMonthlyClientsConfig(list){setConfigAsync('monthlyClients',list);}
 function getMonthlyClientsExcluded(){return getConfig('monthlyClientsExcluded')||[];}
-function setMonthlyClientsExcluded(list){setConfig('monthlyClientsExcluded',list);}
+function setMonthlyClientsExcluded(list){setConfigAsync('monthlyClientsExcluded',list);}
 function getFixedCostsConfig(){return getConfig('fixedCosts')||[];}
-function setFixedCostsConfig(list){setConfig('fixedCosts',list);}
+function setFixedCostsConfig(list){setConfigAsync('fixedCosts',list);}
 
 // ── CLIENTI RICORRENTI ──────────────────────────────────────────
 function getMonthlyClients(){
