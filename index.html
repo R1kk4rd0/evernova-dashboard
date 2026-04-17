@@ -306,7 +306,16 @@ async function loadAll(){
     DB.goals=data.goals||[];DB.saldo=data.saldo||{balance:0};
     const config=data.config||[];
     DB.configCache={};
-    config.forEach(c=>{try{DB.configCache[c.chiave]=JSON.parse(c.valore);}catch(e){DB.configCache[c.chiave]=c.valore;}});
+    config.forEach(c=>{
+      try{
+        const parsed=JSON.parse(c.valore);
+        DB.configCache[c.chiave]=parsed;
+        if(c.chiave==='fixedCosts') console.log('Loaded fixedCosts:', parsed, 'typeof:', typeof parsed, 'isArray:', Array.isArray(parsed));
+      }catch(e){
+        DB.configCache[c.chiave]=c.valore;
+        if(c.chiave==='fixedCosts') console.log('Failed to parse fixedCosts, using raw:', c.valore, 'error:', e.message);
+      }
+    });
     setConn('live','Qonto connesso');return true;
   }catch(e){setConn('error','Errore connessione');toast('Errore: '+e.message,'error');return false;}
 }
@@ -1411,7 +1420,11 @@ function openAddCostModal(projId){
   });
 }
 // ── CONFIG STORAGE (Google Sheet) ──────────────────────────────────────────
-function getConfig(key){return DB.configCache[key]||null;}
+function getConfig(key){
+  const val = DB.configCache[key]||null;
+  if(key === 'fixedCosts') console.log('getConfig(fixedCosts):', val, 'typeof:', typeof val, 'isArray:', Array.isArray(val));
+  return val;
+}
 async function setConfigAsync(key,val){
   console.log('setConfigAsync:', key, 'val length:', val.length, 'val:', val);
   DB.configCache[key]=val;
@@ -1423,11 +1436,32 @@ async function setConfigAsync(key,val){
     throw e;
   }
 }
-function getMonthlyClientsConfig(){return getConfig('monthlyClients')||[];}
+function getMonthlyClientsConfig(){
+  const val = getConfig('monthlyClients')||[];
+  if(typeof val === 'string') { try { return JSON.parse(val); } catch(e) { return []; } }
+  return val;
+}
 async function setMonthlyClientsConfig(list){await setConfigAsync('monthlyClients',list);}
-function getMonthlyClientsExcluded(){return getConfig('monthlyClientsExcluded')||[];}
+function getMonthlyClientsExcluded(){
+  const val = getConfig('monthlyClientsExcluded')||[];
+  if(typeof val === 'string') { try { return JSON.parse(val); } catch(e) { return []; } }
+  return val;
+}
 async function setMonthlyClientsExcluded(list){await setConfigAsync('monthlyClientsExcluded',list);}
-function getFixedCostsConfig(){return getConfig('fixedCosts')||[];}
+function getFixedCostsConfig(){
+  const val = getConfig('fixedCosts')||[];
+  // Safety check: se è una stringa, parsa come JSON
+  if(typeof val === 'string') {
+    console.warn('getFixedCostsConfig: val is a string! Attempting JSON.parse...', val);
+    try {
+      return JSON.parse(val);
+    } catch(e) {
+      console.error('Failed to parse fixedCosts string:', e);
+      return [];
+    }
+  }
+  return val;
+}
 async function setFixedCostsConfig(list){await setConfigAsync('fixedCosts',list);}
 
 // ── CLIENTI RICORRENTI ──────────────────────────────────────────
@@ -1437,7 +1471,14 @@ function getMonthlyClients(){
 }
 function getFixedCosts(){
   const list=getFixedCostsConfig();
-  return list.reduce((s,c)=>s+Number(c.importo||0),0);
+  console.log('getFixedCosts - list:', list, 'typeof:', typeof list, 'isArray:', Array.isArray(list));
+  if(!Array.isArray(list)) {
+    console.warn('getFixedCosts - list is not an array! Returning 0');
+    return 0;
+  }
+  const total = list.reduce((s,c)=>s+Number(c.importo||0),0);
+  console.log('getFixedCosts - total:', total);
+  return total;
 }
 function showMonthlyClientsModal(){
   const clients=getMonthlyClients();
