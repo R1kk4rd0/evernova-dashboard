@@ -997,14 +997,20 @@ function renderProjectDetail(id,c){
 async function delCost(costId,projId){
   const cost=DB.costi.find(x=>String(x.id)===String(costId));
   const fornId=cost?String(cost.fornitoreId||''):'';
-  await del('deleteCost',costId);
-  if(fornId){
-    const altriCosti=DB.costi.some(c=>String(c.progettoId)===String(projId)&&String(c.fornitoreId)===String(fornId));
-    if(!altriCosti){
-      const fp=DB.fornProgetti.find(x=>String(x.fornitoreId)===String(fornId)&&String(x.progettoId)===String(projId));
-      if(fp){await apiPost('deleteFornProg',{id:fp.id});await loadAll();}
+  showLoading('Eliminazione...');
+  try{
+    await apiPost('deleteCost',{id:costId});
+    if(fornId){
+      const altriCosti=DB.costi.filter(c=>String(c.id)!==String(costId)&&String(c.progettoId)===String(projId)&&String(c.fornitoreId)===String(fornId));
+      if(!altriCosti.length){
+        const fp=DB.fornProgetti.find(x=>String(x.fornitoreId)===String(fornId)&&String(x.progettoId)===String(projId));
+        if(fp)await apiPost('deleteFornProg',{id:fp.id});
+      }
     }
-  }
+    await loadAll();
+    toast('Eliminato','success');
+  }catch(e){toast('Errore: '+e.message,'error');}
+  finally{hideLoading();}
   showDetail('project',projId);
 }
 async function saveProjNotes(id,val){const p=DB.progetti.find(x=>String(x.id)===String(id));if(p){p.note=val;await save('saveProject',p);}}
