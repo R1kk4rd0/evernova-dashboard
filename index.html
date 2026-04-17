@@ -1412,15 +1412,20 @@ function getConfig(key){const raw=localStorage.getItem('evernova_'+key);return r
 function setConfig(key,val){localStorage.setItem('evernova_'+key,JSON.stringify(val));}
 function getMonthlyClientsConfig(){return getConfig('monthlyClients')||[];}
 function setMonthlyClientsConfig(list){setConfig('monthlyClients',list);}
+function getMonthlyClientsExcluded(){return getConfig('monthlyClientsExcluded')||[];}
+function setMonthlyClientsExcluded(list){setConfig('monthlyClientsExcluded',list);}
 function getFixedCostsConfig(){return getConfig('fixedCosts')||[];}
 function setFixedCostsConfig(list){setConfig('fixedCosts',list);}
 
 // ── CLIENTI RICORRENTI ──────────────────────────────────────────
 function getMonthlyClients(){
+  const excluded=new Set(getMonthlyClientsExcluded().map(String));
   const auto=new Map();
   DB.fatture.forEach(f=>{
     if(getStatoEffettivo(f)!=='paid')return;
-    const cid=String(f.clienteId),cname=f.clienteNome||clientName(cid);
+    const cid=String(f.clienteId);
+    if(excluded.has(cid))return;
+    const cname=f.clienteNome||clientName(cid);
     const ym=(f.data||'').substring(0,7);
     if(!auto.has(cid))auto.set(cid,{id:cid,nome:cname,months:new Set(),isManuale:false,importoMensile:0});
     auto.get(cid).months.add(ym);
@@ -1478,8 +1483,18 @@ function addMonthlyClientModal(){
   },'Aggiungi');
 }
 function removeMonthlyClient(id){
-  const list=getMonthlyClientsConfig().filter(c=>String(c.id)!==String(id));
-  setMonthlyClientsConfig(list);
+  const manual=getMonthlyClientsConfig();
+  const isManual=manual.some(m=>String(m.id)===String(id));
+  if(isManual){
+    const list=manual.filter(c=>String(c.id)!==String(id));
+    setMonthlyClientsConfig(list);
+  }else{
+    const excluded=getMonthlyClientsExcluded();
+    if(!excluded.some(e=>String(e)===String(id))){
+      excluded.push(id);
+      setMonthlyClientsExcluded(excluded);
+    }
+  }
   showMonthlyClientsModal();
 }
 
