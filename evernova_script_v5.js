@@ -470,7 +470,7 @@ function setupSheet(name, headers) {
 function clientHeaders()    { return ['id','qontoId','nome','tipo','email','tel','piva','citta','note','createdAt','updatedAt']; }
 function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt','invoiceUrl','itemTitolo','tipoFattura']; }
 function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
-function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','fornitoreId','createdAt','updatedAt']; }
+function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt','fornitoreId']; }
 function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fonte','createdAt','updatedAt','fornitoreId']; }
 function fornitoriHeaders()   { return ['id','nome','categoria','email','tel','tariffa','note','createdAt','updatedAt']; }
 function fornProgettiHeaders(){ return ['id','fornitoreId','progettoId','ruolo','note','createdAt','updatedAt']; }
@@ -565,6 +565,18 @@ function linkSpeseFornitori() {
   }
   Logger.log('linkSpeseFornitori — collegate: ' + linked + ' | già collegate: ' + skipped + ' | totale: ' + (rows.length - 1));
   return { linked, skipped };
+}
+
+function migrateCostColumns() {
+  const sheet = getSheet(SHEET_NAMES.costi);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.includes('fornitoreId')) {
+    Logger.log('fornitoreId già presente in CostiProgetto');
+    return;
+  }
+  const newCol = sheet.getLastColumn() + 1;
+  sheet.getRange(1, newCol).setValue('fornitoreId').setFontWeight('bold');
+  Logger.log('Aggiunta colonna fornitoreId a CostiProgetto');
 }
 
 function migrateInvoiceColumns() {
