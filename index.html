@@ -649,7 +649,10 @@ function openInvDetail(id){
           <option value="overdue" ${inv.stato==='overdue'?'selected':''}>Scaduta</option>
         </select></div>
       </div>
-    </div>`:'<div style="font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:12px">Fattura Qonto — sola lettura.</div>'}
+    </div>`:`<div style="border-top:1px solid var(--border);padding-top:12px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:var(--text3)">Fattura Qonto — sola lettura.</span>
+      <button class="btn-danger" style="font-size:12px;padding:5px 10px" onclick="delInvAndClose('${inv.id}')">Rimuovi dalla dashboard</button>
+    </div>`}
   `;
   const saveBtn=document.getElementById('modalSaveBtn');
   saveBtn.textContent=isQonto?'Chiudi':'Salva';
@@ -1021,6 +1024,7 @@ function openLinkFornModal(expId){
 }
 async function addExpense(){const d=document.getElementById('eDesc')?.value.trim(),a=parseFloat(document.getElementById('eAmt')?.value),cat=document.getElementById('eCat')?.value;if(!d||!a)return;await save('saveExpense',{id:uid(),descrizione:d,importo:a,categoria:cat,data:new Date().toISOString().split('T')[0],fonte:'manuale'});render();}
 async function delExp(id){await del('deleteExpense',id);render();}
+async function delInvAndClose(id){closeModal();await del('deleteInvoice',id);render();}
 
 // ── SYNC ─────────────────────────────────────────────────────
 // ── CATEGORIE FORNITORI ──────────────────────────────────────

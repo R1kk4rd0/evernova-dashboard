@@ -171,7 +171,7 @@ function syncFatture() {
     invoices.forEach(inv => {
       if (byQontoId.has(inv.id)) {
         const ex = byQontoId.get(inv.id);
-        const nuovoStato = mapStato(inv.status);
+        const nuovoStato = inv.invoice_type === 'credit_note' ? 'annullata' : mapStato(inv.status);
         if (ex.stato !== nuovoStato) {
           ex.stato = nuovoStato;
           ex.updatedAt = new Date().toISOString();
@@ -191,7 +191,7 @@ function syncFatture() {
         clienteId, clienteNome,
         descrizione: inv.number || 'Fattura Qonto',
         importo: (inv.total_amount_cents || 0) / 100,
-        stato: mapStato(inv.status),
+        stato: inv.invoice_type === 'credit_note' ? 'annullata' : mapStato(inv.status),
         data: inv.issue_date || '', scadenza: inv.due_date || '',
         fonte: 'qonto',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
