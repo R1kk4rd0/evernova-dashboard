@@ -1229,7 +1229,7 @@ function showFornDetail(id){
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
           <div style="flex:1">
             <div style="font-size:13px;font-weight:500;color:var(--text)">${e.descrizione||''}</div>
-            <div style="font-size:11px;color:var(--text3)">${e.categoria||''} · ${fmtDate(e.data)}</div>
+            <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px">${e.categoria||''} · ${fmtDate(e.data)}${e.fonte==='qonto'?'<span style="background:var(--accent-light);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500">Qonto</span>':''}</div>
           </div>
           <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(e.importo)}</div>
         </div>`).join('')}
@@ -1241,9 +1241,10 @@ function showFornDetail(id){
         links.map(fp=>{
           const proj=DB.progetti.find(x=>String(x.id)===String(fp.progettoId));
           if(!proj)return '';
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div style="flex:1"><div style="font-size:13px;font-weight:500">${proj.nome}</div><div style="font-size:11px;color:var(--text3)">${fp.ruolo||''}</div></div>
+          return `<div onclick="closeModal();showDetail('project','${proj.id}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--accent)">${proj.nome}</div><div style="font-size:11px;color:var(--text3)">${fp.ruolo||''}</div></div>
             ${projBadge[proj.stato]||''}
+            <span style="font-size:12px;color:var(--text3)">→</span>
           </div>`;
         }).join('');
     })()}
