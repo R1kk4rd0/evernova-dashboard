@@ -236,6 +236,7 @@ let selectMode=false,selectedClients=new Set();
 let filters={clients:{q:''},invoices:{q:'',anno:''},expenses:{q:'',anno:'',cat:''},projects:{q:'',stato:''}};
 let charts={},modalSaveFn=null;
 let invSort={col:'data',dir:'desc'};
+let revYear='';
 
 // ── AVATAR COLORS ────────────────────────────────────────────
 const COLORS=[['#EEF2FF','#4F46E5'],['#FEF3C7','#D97706'],['#DCFCE7','#16A34A'],['#FEE2E2','#DC2626'],['#DBEAFE','#2563EB'],['#F3E8FF','#9333EA'],['#FFF7ED','#EA580C'],['#ECFDF5','#059669']];
@@ -386,7 +387,7 @@ function renderOverview(c){
     <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Margine netto</div><div class="kpi-icon" style="background:#F3E8FF"><svg viewBox="0 0 16 16" fill="none"><path d="M3 13l3-4 3 2 4-6" stroke="#9333EA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><div class="kpi-value">${fmtEur(incassato-speseTot)}</div><div class="kpi-footer"><span class="kpi-delta ${incassato-speseTot>=0?'pos':'neg'}">${incassato>0?Math.round((incassato-speseTot)/incassato*100):0}%</span><span class="kpi-footer-label">Incassato - Spese</span></div></div>
   </div>
   <div class="charts-row">
-    <div class="card"><div class="card-header"><div><div class="card-title">Revenue per cliente</div><div class="card-sub">Fatture pagate</div></div></div><div style="position:relative;height:260px"><canvas id="revChart"></canvas></div></div>
+    <div class="card"><div class="card-header"><div><div class="card-title">Revenue per cliente</div><div class="card-sub">Fatture pagate · clicca una barra per vedere le fatture</div></div><div style="display:flex;gap:4px;flex-wrap:wrap" id="revYearPills"></div></div><div style="position:relative;height:260px"><canvas id="revChart"></canvas></div></div>
     <div class="card"><div class="card-header"><div><div class="card-title">Obiettivi</div><div class="card-sub">Clicca per aggiornare</div></div></div><div id="goalsEl"></div></div>
   </div>
   <div class="two-col">
@@ -411,10 +412,44 @@ function renderOverview(c){
     return `<div class="recent-item"><div class="avatar" style="background:${bg};color:${fg}">${initials(nome)}</div><div><div class="recent-name">${nome}</div><div class="recent-sub">${cl.email||cl.citta||'Cliente Qonto'}</div></div><div class="recent-amt">${fmtEur(clientInvs(cl.id).filter(i=>getStatoEffettivo(i)==='paid').reduce((s,i)=>s+Number(i.importo||0),0))}</div></div>`;
   }).join('')||'<div style="font-size:13px;color:var(--text3)">Nessun cliente.</div>';
 
-  const byClient={};DB.fatture.filter(i=>getStatoEffettivo(i)==='paid').forEach(i=>{const n=i.clienteNome||clientName(i.clienteId);byClient[n]=(byClient[n]||0)+Number(i.importo||0);});
+  const revAnni=[...new Set(DB.fatture.filter(i=>getStatoEffettivo(i)==='paid').map(i=>(i.data||'').substring(0,4)).filter(Boolean))].sort().reverse();
+  const pillsEl=document.getElementById('revYearPills');
+  if(pillsEl)pillsEl.innerHTML=[['','Tutti'],...revAnni.map(y=>[y,y])].map(([v,l])=>`<button class="pill ${revYear===v?'active':'inactive'}" style="font-size:11px;padding:4px 10px" onclick="revYear='${v}';renderRevChart('${v}')">${l}</button>`).join('');
+  renderRevChart(revYear);
+}
+
+function renderRevChart(year){
+  if(charts.rev){try{charts.rev.destroy();}catch(e){}delete charts.rev;}
+  const fatturePagate=DB.fatture.filter(i=>{
+    if(getStatoEffettivo(i)!=='paid')return false;
+    if(year&&!(i.data||'').startsWith(year))return false;
+    return true;
+  });
+  const byClient={};
+  fatturePagate.forEach(i=>{const n=i.clienteNome||clientName(i.clienteId);byClient[n]=(byClient[n]||0)+Number(i.importo||0);});
   const sorted=Object.entries(byClient).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const trunc=(s,n=24)=>s.length>n?s.substring(0,n)+'…':s;
-  if(sorted.length){charts.rev=new Chart(document.getElementById('revChart'),{type:'bar',data:{labels:sorted.map(e=>trunc(e[0])),datasets:[{data:sorted.map(e=>e[1]),backgroundColor:'#4F46E5',borderRadius:[0,6,6,0],borderSkipped:false,barThickness:22}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtEur(ctx.raw)}}},scales:{x:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+Number(v).toLocaleString('it-IT')},grid:{color:'#F3F4F6'},border:{display:false}},y:{ticks:{font:{size:12,weight:'500'},color:'#374151'},grid:{display:false},border:{display:false}}}}});}
+  if(!sorted.length)return;
+  charts.rev=new Chart(document.getElementById('revChart'),{
+    type:'bar',
+    data:{labels:sorted.map(e=>trunc(e[0])),datasets:[{data:sorted.map(e=>e[1]),backgroundColor:'#4F46E5',borderRadius:[0,6,6,0],borderSkipped:false,barThickness:22}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtEur(ctx.raw)}}},
+      onClick:(evt,els)=>{
+        if(!els.length)return;
+        const nome=sorted[els[0].index][0];
+        filters.invoices.q=nome;
+        filters.invoices.anno=year||'';
+        navTo('invoices');
+      },
+      onHover:(evt,els)=>{if(evt.native)evt.native.target.style.cursor=els.length?'pointer':'default';},
+      scales:{
+        x:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+Number(v).toLocaleString('it-IT')},grid:{color:'#F3F4F6'},border:{display:false}},
+        y:{ticks:{font:{size:12,weight:'500'},color:'#374151'},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
 }
 
 // ── INVOICES ─────────────────────────────────────────────────
