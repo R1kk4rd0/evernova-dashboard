@@ -419,6 +419,9 @@ function renderOverview(c){
 }
 
 function renderRevChart(year){
+  revYear=year;
+  const pillsEl=document.getElementById('revYearPills');
+  if(pillsEl){const revAnni=[...new Set(DB.fatture.filter(i=>getStatoEffettivo(i)==='paid').map(i=>(i.data||'').substring(0,4)).filter(Boolean))].sort().reverse();pillsEl.innerHTML=[['','Tutti'],...revAnni.map(y=>[y,y])].map(([v,l])=>`<button class="pill ${revYear===v?'active':'inactive'}" style="font-size:11px;padding:4px 10px" onclick="revYear='${v}';renderRevChart('${v}')">${l}</button>`).join('');}
   if(charts.rev){try{charts.rev.destroy();}catch(e){}delete charts.rev;}
   const fatturePagate=DB.fatture.filter(i=>{
     if(getStatoEffettivo(i)!=='paid')return false;
