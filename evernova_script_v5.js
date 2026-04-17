@@ -1,0 +1,499 @@
+// ============================================================
+// EVERNOVA DASHBOARD — Google Apps Script v5
+// ============================================================
+
+const QONTO_LOGIN  = 'evernova-s-r-l-7827';
+const QONTO_SECRET = 'd362a4469134a57dd08d518fde14768b';
+
+const SHEET_NAMES = {
+  clienti:  'Clienti',
+  fatture:  'Fatture',
+  progetti: 'Progetti',
+  costi:    'CostiProgetto',
+  spese:    'Spese',
+  fornitori:'Fornitori',
+  config:   'Config',
+};
+
+const QONTO_BASE = 'https://thirdparty.qonto.com/v2';
+
+function doGet(e)  { return handleRequest(e, 'GET');  }
+function doPost(e) { return handleRequest(e, 'POST'); }
+
+function handleRequest(e, method) {
+  try {
+    const action = e.parameter?.action || '';
+    const body   = method === 'POST' && e.postData ? JSON.parse(e.postData.contents) : {};
+    let result;
+    if      (action === 'ping')           result = { ok: true };
+    else if (action === 'all')            result = readAll();
+    else if (action === 'sync')           result = syncQonto();
+    else if (action === 'saveClient')     result = saveRow(SHEET_NAMES.clienti,   body, clientHeaders());
+    else if (action === 'deleteClient')   result = deleteRow(SHEET_NAMES.clienti,  body.id);
+    else if (action === 'saveInvoice')    result = saveRow(SHEET_NAMES.fatture,   body, invoiceHeaders());
+    else if (action === 'deleteInvoice')  result = deleteRow(SHEET_NAMES.fatture,  body.id);
+    else if (action === 'saveProject')    result = saveRow(SHEET_NAMES.progetti,  body, projectHeaders());
+    else if (action === 'deleteProject')  result = deleteRow(SHEET_NAMES.progetti, body.id);
+    else if (action === 'saveCost')       result = saveRow(SHEET_NAMES.costi,     body, costHeaders());
+    else if (action === 'deleteCost')     result = deleteRow(SHEET_NAMES.costi,   body.id);
+    else if (action === 'saveExpense')    result = saveRow(SHEET_NAMES.spese,     body, expenseHeaders());
+    else if (action === 'deleteExpense')  result = deleteRow(SHEET_NAMES.spese,   body.id);
+    else if (action === 'saveForn')       result = saveRow(SHEET_NAMES.fornitori, body, fornitoriHeaders());
+    else if (action === 'deleteForn')     result = deleteRow(SHEET_NAMES.fornitori, body.id);
+    else if (action === 'saveGoals')      result = saveGoals(body.goals);
+    else if (action === 'assignExpense')  result = assignExpenseToProject(body);
+    else result = { error: 'Azione non riconosciuta: ' + action };
+    return jsonResponse(result);
+  } catch (err) {
+    return jsonResponse({ error: err.message });
+  }
+}
+
+function readAll() {
+  ensureSheets();
+  return {
+    clienti:   sheetToObjects(SHEET_NAMES.clienti),
+    fatture:   sheetToObjects(SHEET_NAMES.fatture),
+    progetti:  sheetToObjects(SHEET_NAMES.progetti),
+    costi:     sheetToObjects(SHEET_NAMES.costi),
+    spese:     sheetToObjects(SHEET_NAMES.spese),
+    fornitori: sheetToObjects(SHEET_NAMES.fornitori),
+    goals:     readGoals(),
+    saldo:     getSaldo(),
+    lastSync:  getConfig('lastQontoSync'),
+  };
+}
+
+function getSaldo() {
+  try {
+    const org = qontoFetch('/organizations/' + QONTO_LOGIN);
+    const totale = org.organization.bank_accounts.reduce((s, acc) => s + acc.balance_cents, 0);
+    return { balance: totale / 100 };
+  } catch(e) { return { balance: 0, error: e.message }; }
+}
+
+function syncQonto() {
+  ensureSheets();
+  const results = { clientiImportati:0, fattureImportate:0, speseImportate:0, beneficiariImportati:0, errors:[] };
+  try {
+    const org = qontoFetch('/organizations/' + QONTO_LOGIN);
+    results.clientiImportati = syncClienti();
+    results.fattureImportate = syncFatture();
+    const ibans = org.organization.bank_accounts.map(acc => acc.iban);
+    for (const iban of ibans) {
+      results.speseImportate += syncSpese(iban);
+    }
+    results.beneficiariImportati = syncBeneficiari();
+    setConfig('lastQontoSync', new Date().toISOString());
+    results.ok = true;
+  } catch(err) { results.errors.push(err.message); }
+  return results;
+}
+
+function syncClienti() {
+  let importati = 0;
+  const existing  = sheetToObjects(SHEET_NAMES.clienti);
+  const byQontoId = new Map(existing.map(r => [String(r.qontoId||''), r]).filter(([k]) => k));
+  const byNome    = new Map(existing.map(r => [normalizeNome(r.nome||''), r]).filter(([k]) => k));
+  try {
+    let nextPage = null, pageCount = 0;
+    do {
+      const path = '/clients?per_page=50' + (nextPage ? '&after_cursor=' + nextPage : '');
+      const data = qontoFetch(path);
+      const clients = data.clients || [];
+      clients.forEach(cl => {
+        const nome = extractNome(cl);
+        const nomeKey = normalizeNome(nome);
+        if (byQontoId.has(cl.id)) return;
+        if (byNome.has(nomeKey)) {
+          const ex = byNome.get(nomeKey);
+          if (!ex.qontoId) {
+            ex.qontoId = cl.id;
+            ex.email = ex.email || cl.email || '';
+            ex.tel   = ex.tel   || cl.phone_number || '';
+            ex.piva  = ex.piva  || cl.vat_number || '';
+            ex.citta = ex.citta || cl.city || '';
+            saveRow(SHEET_NAMES.clienti, ex, clientHeaders());
+          }
+          return;
+        }
+        const row = {
+          id: 'Q_' + cl.id, qontoId: cl.id, nome,
+          tipo: 'Cliente Qonto',
+          email: cl.email || '', tel: cl.phone_number || cl.phone || '',
+          piva: cl.vat_number || '', citta: cl.city || '', note: '',
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        };
+        appendRow(SHEET_NAMES.clienti, row, clientHeaders());
+        byQontoId.set(cl.id, row);
+        byNome.set(nomeKey, row);
+        importati++;
+      });
+      nextPage = data.meta?.next_cursor || null;
+      pageCount++;
+    } while (nextPage && pageCount < 10);
+  } catch(e) {
+    Logger.log('Fallback clienti da fatture: ' + e.message);
+    const fatture = qontoFetch('/client_invoices?per_page=50').client_invoices || [];
+    fatture.forEach(inv => {
+      if (!inv.client) return;
+      const nome = extractNome(inv.client);
+      const nomeKey = normalizeNome(nome);
+      if (byNome.has(nomeKey) || byQontoId.has(inv.client.id||'')) return;
+      const row = {
+        id: 'Q_' + inv.client.id, qontoId: inv.client.id, nome,
+        tipo:'Cliente Qonto', email:inv.client.email||'', tel:'', piva:'', citta:'', note:'',
+        createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
+      };
+      appendRow(SHEET_NAMES.clienti, row, clientHeaders());
+      byQontoId.set(inv.client.id, row);
+      byNome.set(nomeKey, row);
+      importati++;
+    });
+  }
+  return importati;
+}
+
+function syncFatture() {
+  let importate = 0;
+  const existingFatture  = sheetToObjects(SHEET_NAMES.fatture);
+  const byQontoId        = new Map(existingFatture.map(r => [String(r.qontoId||''), r]).filter(([k]) => k));
+  const clienti          = sheetToObjects(SHEET_NAMES.clienti);
+  const clienteByNome    = new Map(clienti.map(c => [normalizeNome(c.nome||''), c]));
+  const clienteByQontoId = new Map(clienti.map(c => [String(c.qontoId||''), c]).filter(([k]) => k));
+
+  let nextPage = null, pageCount = 0;
+  do {
+    const path = '/client_invoices?per_page=50&sort_by=issue_date:desc' +
+                 (nextPage ? '&page=' + nextPage : '');
+    const data = qontoFetch(path);
+    const invoices = data.client_invoices || [];
+    invoices.forEach(inv => {
+      if (byQontoId.has(inv.id)) {
+        const ex = byQontoId.get(inv.id);
+        const nuovoStato = mapStato(inv.status);
+        if (ex.stato !== nuovoStato) {
+          ex.stato = nuovoStato;
+          ex.updatedAt = new Date().toISOString();
+          saveRow(SHEET_NAMES.fatture, ex, invoiceHeaders());
+        }
+        return;
+      }
+      let clienteId = '', clienteNome = '';
+      if (inv.client) {
+        clienteNome = extractNome(inv.client);
+        const cl = clienteByQontoId.get(inv.client.id||'')
+                || clienteByNome.get(normalizeNome(clienteNome));
+        if (cl) clienteId = String(cl.id);
+      }
+      const row = {
+        id: 'Q_' + inv.id, qontoId: inv.id,
+        clienteId, clienteNome,
+        descrizione: inv.number || 'Fattura Qonto',
+        importo: (inv.total_amount_cents || 0) / 100,
+        stato: mapStato(inv.status),
+        data: inv.issue_date || '', scadenza: inv.due_date || '',
+        fonte: 'qonto',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      appendRow(SHEET_NAMES.fatture, row, invoiceHeaders());
+      byQontoId.set(inv.id, row);
+      importate++;
+    });
+    Logger.log('Pagina ' + data.meta?.current_page + '/' + data.meta?.total_pages + ' — fatture: ' + invoices.length);
+    nextPage = (data.meta?.current_page < data.meta?.total_pages)
+               ? (data.meta.current_page + 1) : null;
+    pageCount++;
+  } while (nextPage && pageCount < 100);
+  return importate;
+}
+
+function syncSpese(iban) {
+  let importate = 0;
+  const existing    = sheetToObjects(SHEET_NAMES.spese);
+  const existingIds = new Set(existing.map(r => String(r.qontoId||'')).filter(Boolean));
+  const fornitori   = sheetToObjects(SHEET_NAMES.fornitori);
+  const fornByNome  = new Map(fornitori.map(f => [normalizeNome(f.nome||''), f]).filter(([k]) => k));
+
+  let nextPage = null, pageCount = 0;
+  do {
+    const path = '/transactions?slug=' + QONTO_LOGIN +
+                 '&iban=' + iban +
+                 '&side=debit&per_page=50&sort_by=emitted_at:desc' +
+                 (nextPage ? '&page=' + nextPage : '');
+    const data = qontoFetch(path);
+    const txs  = data.transactions || [];
+    txs.forEach(tx => {
+      if (tx.category === 'treasury_and_interco') return;
+      if (existingIds.has(tx.id)) return;
+      const fornKey = normalizeNome(tx.counterpart_name||tx.label||'');
+      const forn = fornByNome.get(fornKey) || 
+        fornitori.find(f => normalizeNome(f.nome||'').includes(fornKey.substring(0,8)) && fornKey.length > 5);
+      appendRow(SHEET_NAMES.spese, {
+        id: 'Q_TX_' + tx.id, qontoId: tx.id,
+        descrizione: tx.label || tx.reference || 'Transazione',
+        categoria: mapCategoria(tx.category),
+        categoriaQonto: tx.category || '',
+        importo: (tx.amount_cents || 0) / 100,
+        data: (tx.settled_at || tx.emitted_at || '').split('T')[0],
+        progettoId: '', fornitoreId: forn ? String(forn.id) : '',
+        fonte: 'qonto',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }, expenseHeaders());
+      existingIds.add(tx.id);
+      importate++;
+    });
+    nextPage = (data.meta?.current_page < data.meta?.total_pages)
+               ? (data.meta.current_page + 1) : null;
+    pageCount++;
+  } while (nextPage && pageCount < 100);
+  setConfig('lastSpesaSync', new Date().toISOString());
+  return importate;
+}
+
+function assignExpenseToProject(body) {
+  const sheet   = getSheet(SHEET_NAMES.spese);
+  const rows    = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const idCol   = headers.indexOf('id');
+  const projCol = headers.indexOf('progettoId');
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idCol]) === String(body.spesaId)) {
+      sheet.getRange(i + 1, projCol + 1).setValue(body.progettoId);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'Spesa non trovata' };
+}
+
+function extractNome(obj) {
+  if (!obj) return 'Cliente senza nome';
+  if (obj.name && obj.name.trim() && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(obj.name.trim())) {
+    return obj.name.trim();
+  }
+  const candidati = [
+    obj.company_name, obj.trading_name,
+    (obj.first_name && obj.last_name) ? obj.first_name + ' ' + obj.last_name : null,
+    obj.first_name, obj.last_name,
+    obj.email ? obj.email.split('@')[0] : null,
+  ];
+  for (const c of candidati) {
+    if (c && c.trim() && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(c.trim())) return c.trim();
+  }
+  return 'Cliente ' + (obj.id || '').substring(0, 8).toUpperCase();
+}
+
+function normalizeNome(nome) {
+  return (nome || '').toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function mapStato(s) {
+  const m = { paid:'paid', draft:'draft', pending:'pending', unpaid:'pending', cancelled:'annullata' };
+  return m[s] || s || 'draft';
+}
+
+function mapCategoria(cat) {
+  const m = {
+    'software':'Software','saas':'Software','it_and_electronics':'Software','online_service':'Software',
+    'advertising':'Marketing','marketing':'Marketing',
+    'travel':'Trasferta','transport':'Trasferta','hotel_and_lodging':'Trasferta',
+    'restaurant_and_bar':'Ristorazione','food_and_grocery':'Ristorazione',
+    'equipment':'Attrezzatura','office_supplies':'Ufficio',
+    'rent':'Affitto','utilities':'Utenze','insurance':'Assicurazioni',
+    'bank_fees':'Banca','fees':'Banca',
+    'taxes':'Tasse','tax':'Tasse',
+    'payroll':'Personale','freelance':'Collaboratori',
+    'other_expense':'Varie','other_service':'Varie',
+    'training':'Formazione','legal':'Consulenze','accounting':'Consulenze',
+  };
+  return m[cat] || 'Altro';
+}
+
+function saveGoals(goals) { setConfig('goals', JSON.stringify(goals)); return { ok: true }; }
+function readGoals() {
+  const raw = getConfig('goals');
+  if (!raw) return [
+    { label:'Fatturato mensile', current:0, target:5000 },
+    { label:'Retainer attivi',   current:0, target:5 },
+    { label:'Lead qualificati',  current:0, target:5 },
+  ];
+  try { return JSON.parse(raw); } catch(e) { return []; }
+}
+
+function saveRow(sheetName, data, headers) {
+  ensureSheets();
+  if (!data.id) data.id = 'ID_' + Date.now();
+  data.updatedAt = new Date().toISOString();
+  if (!data.createdAt) data.createdAt = new Date().toISOString();
+  const sheet = getSheet(sheetName);
+  const rows  = sheet.getDataRange().getValues();
+  const idCol = headers.indexOf('id');
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idCol]) === String(data.id)) {
+      sheet.getRange(i + 1, 1, 1, headers.length)
+           .setValues([headers.map(h => data[h] !== undefined ? data[h] : rows[i][headers.indexOf(h)])]);
+      return { ok:true, action:'updated', id:data.id };
+    }
+  }
+  appendRow(sheetName, data, headers);
+  return { ok:true, action:'created', id:data.id };
+}
+
+function deleteRow(sheetName, id) {
+  const sheet = getSheet(sheetName);
+  const rows  = sheet.getDataRange().getValues();
+  const idCol = rows[0].indexOf('id');
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][idCol]) === String(id)) { sheet.deleteRow(i + 1); return { ok:true }; }
+  }
+  return { ok:false, error:'Non trovato: ' + id };
+}
+
+function getConfig(key) {
+  const sheet = getSheet(SHEET_NAMES.config);
+  const data  = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) { if (data[i][0] === key) return data[i][1]; }
+  return null;
+}
+function setConfig(key, value) {
+  const sheet = getSheet(SHEET_NAMES.config);
+  const data  = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === key) { sheet.getRange(i + 1, 2).setValue(value); return; }
+  }
+  sheet.appendRow([key, value]);
+}
+
+function qontoFetch(path) {
+  const res = UrlFetchApp.fetch(QONTO_BASE + path, {
+    method: 'get',
+    headers: { 'Authorization': QONTO_LOGIN + ':' + QONTO_SECRET },
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code !== 200) throw new Error('Qonto HTTP ' + code + ': ' + res.getContentText().substring(0, 300));
+  return JSON.parse(res.getContentText());
+}
+
+function getSheet(name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+function appendRow(sheetName, data, headers) {
+  getSheet(sheetName).appendRow(headers.map(h => data[h] !== undefined ? data[h] : ''));
+}
+function sheetToObjects(sheetName) {
+  const sheet = getSheet(sheetName);
+  const data  = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  const headers = data[0];
+  return data.slice(1)
+    .filter(row => row.some(cell => cell !== ''))
+    .map(row => { const obj = {}; headers.forEach((h, i) => { obj[h] = row[i]; }); return obj; });
+}
+function jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function ensureSheets() {
+  setupSheet(SHEET_NAMES.clienti,   clientHeaders());
+  setupSheet(SHEET_NAMES.fatture,   invoiceHeaders());
+  setupSheet(SHEET_NAMES.progetti,  projectHeaders());
+  setupSheet(SHEET_NAMES.costi,     costHeaders());
+  setupSheet(SHEET_NAMES.spese,     expenseHeaders());
+  setupSheet(SHEET_NAMES.fornitori, fornitoriHeaders());
+  setupSheet(SHEET_NAMES.config,    ['chiave', 'valore']);
+}
+function setupSheet(name, headers) {
+  const sheet = getSheet(name);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+}
+
+function clientHeaders()    { return ['id','qontoId','nome','tipo','email','tel','piva','citta','note','createdAt','updatedAt']; }
+function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt']; }
+function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
+function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt']; }
+function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fornitoreId','fonte','createdAt','updatedAt']; }
+function fornitoriHeaders() { return ['id','nome','categoria','email','tel','tariffa','note','createdAt','updatedAt']; }
+
+function syncBeneficiari() {
+  const existing = sheetToObjects(SHEET_NAMES.fornitori);
+  const byNome = new Map(existing.map(f => [normalizeNome(f.nome||''), f]));
+  let importati = 0;
+  let nextPage = null, pageCount = 0;
+  do {
+    const path = '/beneficiaries?per_page=50' + (nextPage ? '&page=' + nextPage : '');
+    const data = qontoFetch(path);
+    (data.beneficiaries || []).forEach(b => {
+      const nomeKey = normalizeNome(b.name||'');
+      if (byNome.has(nomeKey)) return;
+      appendRow(SHEET_NAMES.fornitori, {
+        id: 'Q_BENE_' + b.id,
+        nome: b.name || '',
+        categoria: 'Altro',
+        email: '', tel: '',
+        tariffa: 0, note: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }, fornitoriHeaders());
+      importati++;
+    });
+    nextPage = (data.meta?.current_page < data.meta?.total_pages)
+               ? (data.meta.current_page + 1) : null;
+    pageCount++;
+  } while (nextPage && pageCount < 10);
+  Logger.log('Beneficiari importati: ' + importati);
+  return importati;
+}
+
+function installTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('syncQonto').timeBased().atHour(3).everyDays(1).create();
+  Logger.log('Trigger installato: sync ogni notte alle 3:00');
+}
+
+function testSetup() {
+  ensureSheets();
+  Logger.log('Fogli OK · Saldo: ' + JSON.stringify(getSaldo()));
+}
+
+function testSync() {
+  const result = syncQonto();
+  Logger.log('Sync: ' + JSON.stringify(result));
+}
+
+function fixJoin() {
+  const clienti = sheetToObjects(SHEET_NAMES.clienti);
+  const byNome  = new Map(clienti.map(c => [normalizeNome(c.nome||''), c]));
+  const sheet   = getSheet(SHEET_NAMES.fatture);
+  const rows    = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const cIdCol  = headers.indexOf('clienteId');
+  const cNmCol  = headers.indexOf('clienteNome');
+  const updCol  = headers.indexOf('updatedAt');
+  let fixed = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][cIdCol]||'').trim()) continue;
+    const nome = String(rows[i][cNmCol]||'').trim();
+    if (!nome) continue;
+    const cl = byNome.get(normalizeNome(nome));
+    if (cl) {
+      sheet.getRange(i+1, cIdCol+1).setValue(cl.id);
+      sheet.getRange(i+1, updCol+1).setValue(new Date().toISOString());
+      fixed++;
+    }
+  }
+  Logger.log('Fix join: ' + fixed + ' fatture collegate');
+}
+
+function debugFattureRecenti() {
+  const data = qontoFetch('/client_invoices?per_page=5&sort_by=issue_date:desc');
+  Logger.log('Meta: ' + JSON.stringify(data.meta));
+  data.client_invoices.forEach(inv => {
+    Logger.log(inv.issue_date + ' | ' + (inv.client?.name||'?') + ' | €' + (inv.total_amount_cents/100) + ' | status: ' + inv.status + ' | id: ' + inv.id.substring(0,8));
+  });
+}

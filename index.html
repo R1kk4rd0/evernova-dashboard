@@ -229,7 +229,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
 </div>
 <script>
-const API='https://script.google.com/macros/s/AKfycbyMVN2A-xa5ZSADy8cN3tpb7VPwYWxY1e6ERkx-l6_1kY3-q041AT9l86hnKEkU9-Bfew/exec';
+const API='https://script.google.com/macros/s/AKfycbyYt69mZlnb4E8WSu_vfitohkijiMr2OVAoh3FmERGEE9mMU28zDAIINDJq-0nVJJYIsw/exec';
 let DB={clienti:[],fatture:[],progetti:[],costi:[],spese:[],fornitori:[],goals:[],saldo:{balance:0}};
 let currentPage='overview',detailCtx={type:null,id:null},invFilter='all';
 let selectMode=false,selectedClients=new Set();
@@ -978,32 +978,20 @@ function renderSuppliers(c){
     if(!grid)return;
     grid.innerHTML=lista.length?lista.map(f=>{
       const [bg,fg]=avatarColor(f.nome||'');
-      return `<div class="client-card" onclick="showFornDetail('${f.id}')" style="cursor:pointer">
+      const spese=fornSpese(f.id);
+      const totSpese=spese.reduce((s,e)=>s+Number(e.importo||0),0);
+      return `<div class="client-card" onclick="showFornDetail('${f.id}')">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <div class="avatar" style="background:${bg};color:${fg};width:40px;height:40px;font-size:14px;border-radius:10px;flex-shrink:0">${initials(f.nome||'')}</div>
           <div style="min-width:0;flex:1">
             <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.nome||''}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:1px">${f.categoria||''}</div>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="openEditFornModal('${f.id}')">✎</button>
-            <button class="btn-danger" style="font-size:11px;padding:4px 8px" onclick="deleteForn('${f.id}')">×</button>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">${f.email||f.categoria||''}</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div style="background:var(--surface2);border-radius:6px;padding:8px 10px">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">Email</div>
-            <div style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.email||'—'}</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:6px;padding:8px 10px">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">Telefono</div>
-            <div style="font-size:12px;color:var(--text)">${f.tel||'—'}</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:6px;padding:8px 10px;grid-column:1/-1">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">Tariffa giornaliera</div>
-            <div style="font-size:14px;font-weight:600;color:var(--accent)">${f.tariffa?fmtEur(f.tariffa)+'/g':'—'}</div>
-          </div>
-          ${f.note?`<div style="background:var(--surface2);border-radius:6px;padding:8px 10px;grid-column:1/-1"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">Note</div><div style="font-size:12px;color:var(--text2)">${f.note}</div></div>`:''}
+        <div class="client-stats">
+          <div class="cstat"><div class="cstat-label">Spese</div><div class="cstat-val">${fmtEur(totSpese)}</div></div>
+          <div class="cstat"><div class="cstat-label">Transazioni</div><div class="cstat-val">${spese.length}</div></div>
+          <div class="cstat"><div class="cstat-label">Categoria</div><div class="cstat-val" style="font-size:11px">${f.categoria||'—'}</div></div>
         </div>
       </div>`;
     }).join(''):'<div style="text-align:center;padding:40px;color:var(--text3)">Nessun fornitore. Clicca "+ Nuovo fornitore".</div>';
