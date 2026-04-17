@@ -1474,13 +1474,13 @@ function addMonthlyClientModal(){
     const list=getMonthlyClientsConfig();
     list.push({id:uid(),nome,importoMensile:amt,isManuale:true});
     setMonthlyClientsConfig(list);
-    closeModal();render();showMonthlyClientsModal();
+    closeModal();showMonthlyClientsModal();
   },'Aggiungi');
 }
 function removeMonthlyClient(id){
   const list=getMonthlyClientsConfig().filter(c=>String(c.id)!==String(id));
   setMonthlyClientsConfig(list);
-  setTimeout(()=>{render();setTimeout(()=>showMonthlyClientsModal(),50);},0);
+  showMonthlyClientsModal();
 }
 
 // ── COSTI FISSI ──────────────────────────────────────────────
@@ -1532,7 +1532,7 @@ function addExpenseFixedCostModal(){
     const list=getFixedCostsConfig();
     list.push({id:uid(),tipo:'expense',spesaId:exp.id,importo:Number(exp.importo||0),descrizione:exp.descrizione||'Spesa'});
     setFixedCostsConfig(list);
-    closeModal();render();editFixedCosts();
+    closeModal();editFixedCosts();
   },'Aggiungi');
 }
 function addManualFixedCostModal(){
@@ -1547,13 +1547,13 @@ function addManualFixedCostModal(){
     const list=getFixedCostsConfig();
     list.push({id:uid(),tipo:'manual',importo:amt,descrizione:desc});
     setFixedCostsConfig(list);
-    closeModal();render();editFixedCosts();
+    closeModal();editFixedCosts();
   },'Aggiungi');
 }
 function removeFixedCost(id){
   const list=getFixedCostsConfig().filter(c=>String(c.id)!==String(id));
   setFixedCostsConfig(list);
-  render();editFixedCosts();
+  editFixedCosts();
 }
 function editGoal(i){const g=DB.goals[i];openModal('Aggiorna obiettivo',g.label,`<div class="modal-row"><div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div><div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;await save('saveGoals',{goals:DB.goals});closeModal();render();});}
 
