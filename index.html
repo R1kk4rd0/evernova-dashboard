@@ -1469,8 +1469,10 @@ function showMonthlyClientsModal(){
 }
 function addMonthlyClientModal(){
   closeModal();
-  openModal('Aggiungi cliente ricorrente','',`
-    <div class="modal-field"><label>Nome cliente</label><input id="mf_mcname" placeholder="es. Acme Corp"></div>
+  const clientOptions=DB.clienti.map(c=>`<option value="${c.id}">${getNome(c)}</option>`).join('');
+  openModal('Aggiungi cliente ricorrente','Scegli da elenco o scrivi il nome',`
+    <div class="modal-field"><label>Cliente</label><select id="mf_mcsel" onchange="(function(){const cid=document.getElementById('mf_mcsel').value;if(cid){const c=DB.clienti.find(x=>String(x.id)===cid);if(c)document.getElementById('mf_mcname').value=getNome(c);}})()"><option value="">— scegli un cliente —</option>${clientOptions}</select></div>
+    <div class="modal-field"><label>Nome (o modifica sopra)</label><input id="mf_mcname" placeholder="es. Acme Corp"></div>
     <div class="modal-field"><label>Importo mensile €</label><input id="mf_mcamt" type="number" placeholder="es. 2500"></div>
   `,async()=>{
     const nome=document.getElementById('mf_mcname').value.trim();
