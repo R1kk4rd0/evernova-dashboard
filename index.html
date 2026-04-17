@@ -896,12 +896,21 @@ function renderExpenses(c){
     const tot=document.getElementById('expTotal');if(tot){tot.textContent=fmtEur(total);tot.style.display=total>0?'':'none';}
     const clr=document.getElementById('expClear');if(clr)clr.classList.toggle('vis',(filters.expenses.q||'').length>0);
     const list=document.getElementById('expList');if(!list)return;
-    list.innerHTML=sf.map(e=>`<div class="exp-row">
-      <div class="merchant-avatar" style="background:${avatarColor(e.descrizione||'')[0]};color:${avatarColor(e.descrizione||'')[1]}">${initials(e.descrizione||'??')}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:500">${e.descrizione}</div><div style="font-size:11px;color:var(--text3)">${e.categoria} · ${fmtDate(e.data)}</div></div>
-      <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(e.importo)}</div>
-      ${e.fonte!=='qonto'?`<span onclick="delExp('${e.id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>`:'<span style="font-size:10px;color:var(--text3);padding:2px 6px;background:var(--surface2);border-radius:4px;margin-left:4px">Q</span>'}
-    </div>`).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">Nessuna spesa.</div>';
+    list.innerHTML=sf.map(e=>{
+      const forn=e.fornitoreId?DB.fornitori.find(f=>String(f.id)===String(e.fornitoreId)):null;
+      const fornTag=forn
+        ?`<span onclick="event.stopPropagation();openLinkFornModal('${e.id}')" style="font-size:10px;color:var(--accent);background:var(--accent-light);padding:2px 8px;border-radius:4px;cursor:pointer">${forn.nome}</span>`
+        :`<span onclick="event.stopPropagation();openLinkFornModal('${e.id}')" style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:4px;cursor:pointer">+ fornitore</span>`;
+      return `<div class="exp-row">
+        <div class="merchant-avatar" style="background:${avatarColor(e.descrizione||'')[0]};color:${avatarColor(e.descrizione||'')[1]}">${initials(e.descrizione||'??')}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500">${e.descrizione}</div>
+          <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-top:2px">${e.categoria} · ${fmtDate(e.data)} ${fornTag}</div>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(e.importo)}</div>
+        ${e.fonte!=='qonto'?`<span onclick="delExp('${e.id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>`:'<span style="font-size:10px;color:var(--text3);padding:2px 6px;background:var(--surface2);border-radius:4px;margin-left:4px">Q</span>'}
+      </div>`;
+    }).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">Nessuna spesa.</div>';
   }
   const totalAll=DB.spese.reduce((s,e)=>s+Number(e.importo||0),0);
   const incassato=DB.fatture.filter(i=>getStatoEffettivo(i)==='paid').reduce((s,i)=>s+Number(i.importo||0),0);
@@ -952,6 +961,19 @@ function renderExpenses(c){
 
   const labs=Object.keys(byCatAll),vals=Object.values(byCatAll),cols=labs.map(l=>catColors[l]||'#9CA3AF');
   if(labs.length){charts.exp=new Chart(document.getElementById('expChart'),{type:'bar',data:{labels:labs,datasets:[{data:vals,backgroundColor:cols,borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},schools:{x:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+v},grid:{color:'#F3F4F6'},border:{display:false}},y:{ticks:{font:{size:11},color:'#6B7280'},grid:{display:false},border:{display:false}}}}});}
+}
+function openLinkFornModal(expId){
+  const e=DB.spese.find(x=>String(x.id)===String(expId));
+  if(!e)return;
+  const opts=DB.fornitori.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(f=>`<option value="${f.id}" ${String(e.fornitoreId)===String(f.id)?'selected':''}>${f.nome}</option>`).join('');
+  openModal('Collega fornitore',e.descrizione+' · '+fmtEur(e.importo),
+    `<div class="modal-field"><label>Fornitore</label><select id="mf_forn"><option value="">— nessuno —</option>${opts}</select></div>`,
+    async function(){
+      const fornId=document.getElementById('mf_forn').value;
+      await save('saveExpense',{...e,fornitoreId:fornId});
+      closeModal();render();
+    }
+  );
 }
 async function addExpense(){const d=document.getElementById('eDesc')?.value.trim(),a=parseFloat(document.getElementById('eAmt')?.value),cat=document.getElementById('eCat')?.value;if(!d||!a)return;await save('saveExpense',{id:uid(),descrizione:d,importo:a,categoria:cat,data:new Date().toISOString().split('T')[0],fonte:'manuale'});render();}
 async function delExp(id){await del('deleteExpense',id);render();}
