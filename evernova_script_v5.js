@@ -544,6 +544,11 @@ function linkSpeseFornitori() {
   return { linked, skipped };
 }
 
+function debugFatturaRaw() {
+  const data = qontoFetch('/client_invoices?per_page=1&sort_by=issue_date:desc');
+  Logger.log(JSON.stringify(data.client_invoices[0], null, 2));
+}
+
 function debugFattureRecenti() {
   const data = qontoFetch('/client_invoices?per_page=5&sort_by=issue_date:desc');
   Logger.log('Meta: ' + JSON.stringify(data.meta));
