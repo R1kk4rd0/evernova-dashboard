@@ -1432,25 +1432,8 @@ async function setFixedCostsConfig(list){await setConfigAsync('fixedCosts',list)
 
 // ── CLIENTI RICORRENTI ──────────────────────────────────────────
 function getMonthlyClients(){
-  const excluded=new Set(getMonthlyClientsExcluded().map(String));
-  const auto=new Map();
-  DB.fatture.forEach(f=>{
-    if(getStatoEffettivo(f)!=='paid')return;
-    const cid=String(f.clienteId);
-    if(excluded.has(cid))return;
-    const cname=f.clienteNome||clientName(cid);
-    const ym=(f.data||'').substring(0,7);
-    if(!auto.has(cid))auto.set(cid,{id:cid,nome:cname,months:new Set(),isManuale:false,importoMensile:0});
-    auto.get(cid).months.add(ym);
-  });
-  const autoList=Array.from(auto.values()).filter(c=>c.months.size>=2).sort((a,b)=>(b.months.size)-(a.months.size));
-  const manual=getMonthlyClientsConfig();
-  const allList=[...autoList,...manual];
-  const seenIds=new Set();
-  return allList.filter(c=>{
-    const key=String(c.id);if(seenIds.has(key))return false;
-    seenIds.add(key);return true;
-  });
+  // Solo clienti inseriti manualmente - no auto-detection
+  return getMonthlyClientsConfig();
 }
 function getFixedCosts(){
   const list=getFixedCostsConfig();
@@ -1458,27 +1441,24 @@ function getFixedCosts(){
 }
 function showMonthlyClientsModal(){
   const clients=getMonthlyClients();
-  const manual=getMonthlyClientsConfig();
   let body='<div style="max-height:380px;overflow-y:auto">';
   if(!clients.length){
     body+='<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px">Nessun cliente ricorrente.</div>';
   }else{
     body+=clients.map((c,i)=>{
       const [bg,fg]=avatarColor(c.nome);
-      const isMan=manual.some(m=>String(m.id)===String(c.id));
-      const badge=isMan?'<span style="background:var(--accent-light);color:var(--accent);font-size:9px;padding:2px 6px;border-radius:3px;font-weight:600">Manuale</span>':'';
       return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)">
         <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:${bg};color:${fg};font-size:11px;font-weight:600;flex-shrink:0">${initials(c.nome)}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.nome} ${badge}</div>
-          <div style="font-size:11px;color:var(--text3)">${c.importoMensile?fmtEur(c.importoMensile)+'/mese':'da storico'}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.nome}</div>
+          <div style="font-size:11px;color:var(--accent);cursor:pointer;font-weight:500" onclick="editMonthlyClientPrice('${c.id}','${c.nome}',${c.importoMensile})">${fmtEur(c.importoMensile)}/mese</div>
         </div>
         <button class="btn-danger" style="flex-shrink:0;padding:4px 8px;font-size:11px" onclick="removeMonthlyClient('${c.id}')">Rimuovi</button>
       </div>`;
     }).join('');
   }
   body+=`</div><button class="btn-primary" style="width:100%;margin-top:12px" onclick="addMonthlyClientModal()">+ Aggiungi cliente</button>`;
-  openModal('Clienti ricorrenti','Fatture pagate + manuali',body,(()=>closeModal()),'Chiudi');
+  openModal('Clienti ricorrenti','Inserimento manuale',body,(()=>closeModal()),'Chiudi');
 }
 function addMonthlyClientModal(){
   closeModal();
@@ -1493,23 +1473,30 @@ function addMonthlyClientModal(){
     if(!nome||!amt){toast('Compila nome e importo','error');return;}
     const list=getMonthlyClientsConfig();
     list.push({id:uid(),nome,importoMensile:amt,isManuale:true});
-    setMonthlyClientsConfig(list);
+    await setMonthlyClientsConfig(list);
     closeModal();showMonthlyClientsModal();
   },'Aggiungi');
 }
+function editMonthlyClientPrice(id,nome,currentAmt){
+  closeModal();
+  openModal('Modifica prezzo',`Cliente: ${nome}`,`
+    <div class="modal-field"><label>Importo mensile €</label><input id="mf_eprice" type="number" value="${currentAmt}" placeholder="es. 2500"></div>
+  `,async()=>{
+    const newAmt=parseFloat(document.getElementById('mf_eprice').value)||0;
+    if(!newAmt){toast('Compila importo','error');return;}
+    const list=getMonthlyClientsConfig();
+    const idx=list.findIndex(c=>String(c.id)===String(id));
+    if(idx>=0){
+      list[idx].importoMensile=newAmt;
+      await setMonthlyClientsConfig(list);
+      closeModal();render();showMonthlyClientsModal();
+    }
+  },'Salva');
+}
 function removeMonthlyClient(id){
   const manual=getMonthlyClientsConfig();
-  const isManual=manual.some(m=>String(m.id)===String(id));
-  if(isManual){
-    const list=manual.filter(c=>String(c.id)!==String(id));
-    setMonthlyClientsConfig(list).then(()=>{render();showMonthlyClientsModal();}).catch(e=>{console.error(e);showMonthlyClientsModal();});
-  }else{
-    const excluded=getMonthlyClientsExcluded();
-    if(!excluded.some(e=>String(e)===String(id))){
-      excluded.push(id);
-      setMonthlyClientsExcluded(excluded).then(()=>{render();showMonthlyClientsModal();}).catch(e=>{console.error(e);showMonthlyClientsModal();});
-    }
-  }
+  const list=manual.filter(c=>String(c.id)!==String(id));
+  setMonthlyClientsConfig(list).then(()=>{render();showMonthlyClientsModal();}).catch(e=>{console.error(e);showMonthlyClientsModal();});
 }
 
 // ── COSTI FISSI ──────────────────────────────────────────────
