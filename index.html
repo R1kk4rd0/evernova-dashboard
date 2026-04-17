@@ -303,7 +303,8 @@ async function loadAll(){
     DB.costi=data.costi||[];DB.spese=data.spese||[];
     DB.fornitori=data.fornitori||[];
     DB.fornProgetti=data.fornProgetti||[];
-    DB.goals=data.goals||[];DB.saldo=data.saldo||{balance:0};
+    DB.goals=data.goals||[];
+    DB.saldo=data.saldo||{balance:0};
     const config=data.config||[];
     DB.configCache={};
     config.forEach(c=>{
@@ -316,10 +317,39 @@ async function loadAll(){
         if(c.chiave==='fixedCosts') console.log('Failed to parse fixedCosts, using raw:', c.valore, 'error:', e.message);
       }
     });
+    ['fixedCosts','monthlyClients','monthlyClientsExcluded','goals'].forEach(key=>{
+      if(DB.configCache[key]===undefined || DB.configCache[key]===null){
+        const fallback=loadConfigFromLocal(key);
+        if(fallback!==null){
+          DB.configCache[key]=fallback;
+          console.log('Restored', key, 'from localStorage', fallback);
+          setConfigAsync(key,fallback).catch(e=>console.warn('Background sync failed for', key, e));
+        }
+      }
+    });
+    if(Array.isArray(DB.configCache.goals)){
+      DB.goals = DB.configCache.goals;
+      console.log('Using goals from config fallback:', DB.goals);
+    }
     setConn('live','Qonto connesso');return true;
   }catch(e){setConn('error','Errore connessione');toast('Errore: '+e.message,'error');return false;}
 }
-async function save(action,data){showLoading('Salvataggio...');try{const res=await apiPost(action,data);if(res.error)throw new Error(res.error);await loadAll();toast('Salvato ✓','success');return res;}catch(e){toast('Errore: '+e.message,'error');throw e;}finally{hideLoading();}}
+async function save(action,data){
+  showLoading('Salvataggio...');
+  try{
+    if(action==='saveGoals' && data && data.goals){
+      saveConfigToLocal('goals', data.goals);
+    }
+    const res=await apiPost(action,data);
+    if(res.error) throw new Error(res.error);
+    await loadAll();
+    toast('Salvato ✓','success');
+    return res;
+  }catch(e){
+    toast('Errore: '+e.message,'error');
+    throw e;
+  }finally{hideLoading();}
+}
 async function del(action,id){showLoading('Eliminazione...');try{const res=await apiPost(action,{id});if(res.error)throw new Error(res.error);await loadAll();toast('Eliminato','success');}catch(e){toast('Errore: '+e.message,'error');}finally{hideLoading();}}
 async function doSync(){showLoading('Sincronizzazione Qonto...');try{const res=await apiGet('sync');await loadAll();toast('Sync OK — clienti:'+res.clientiImportati+' fatture:'+res.fattureImportate+' spese:'+res.speseImportate,'success');render();}catch(e){toast('Errore sync: '+e.message,'error');}finally{hideLoading();}}
 
@@ -1419,37 +1449,53 @@ function openAddCostModal(projId){
     closeModal();showDetail('project',projId);
   });
 }
-// ── CONFIG STORAGE (Google Sheet) ──────────────────────────────────────────
+// ── CONFIG STORAGE (Google Sheet + localStorage fallback) ──────────────────────────────────────────
+const CONFIG_LOCAL_KEYS={fixedCosts:'evernova_fixedCosts',monthlyClients:'evernova_monthlyClients',monthlyClientsExcluded:'evernova_monthlyClientsExcluded',goals:'evernova_goals'};
+function saveConfigToLocal(key,val){
+  try{localStorage.setItem(CONFIG_LOCAL_KEYS[key]||`evernova_${key}`,JSON.stringify(val));}
+  catch(e){console.warn('Unable to save config to localStorage',key,e);}
+}
+function loadConfigFromLocal(key){
+  try{
+    const raw=localStorage.getItem(CONFIG_LOCAL_KEYS[key]||`evernova_${key}`);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){console.warn('Unable to load config from localStorage',key,e);return null;}
+}
 function getConfig(key){
   const val = DB.configCache[key]||null;
-  if(key === 'fixedCosts') console.log('getConfig(fixedCosts):', val, 'typeof:', typeof val, 'isArray:', Array.isArray(val));
+  if(key === 'fixedCosts' || key==='goals') console.log('getConfig('+key+'):', val, 'typeof:', typeof val, 'isArray:', Array.isArray(val));
   return val;
 }
 async function setConfigAsync(key,val){
   console.log('setConfigAsync:', key, 'val length:', val.length, 'val:', val);
   DB.configCache[key]=val;
+  saveConfigToLocal(key,val);
   try {
     const result = await apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)});
     console.log('setConfigAsync response:', result);
   } catch(e) {
-    console.error('setConfigAsync error:', e);
+    console.warn('setConfigAsync backend failed, kept local only', key, e);
     throw e;
   }
 }
 function getMonthlyClientsConfig(){
-  const val = getConfig('monthlyClients')||[];
+  const raw = getConfig('monthlyClients');
+  const val = raw == null ? loadConfigFromLocal('monthlyClients') || [] : raw;
   if(typeof val === 'string') { try { return JSON.parse(val); } catch(e) { return []; } }
   return val;
 }
 async function setMonthlyClientsConfig(list){await setConfigAsync('monthlyClients',list);}
 function getMonthlyClientsExcluded(){
-  const val = getConfig('monthlyClientsExcluded')||[];
+  const raw = getConfig('monthlyClientsExcluded');
+  const val = raw == null ? loadConfigFromLocal('monthlyClientsExcluded') || [] : raw;
   if(typeof val === 'string') { try { return JSON.parse(val); } catch(e) { return []; } }
   return val;
 }
 async function setMonthlyClientsExcluded(list){await setConfigAsync('monthlyClientsExcluded',list);}
 function getFixedCostsConfig(){
-  const val = getConfig('fixedCosts')||[];
+  const raw = getConfig('fixedCosts');
+  const val = raw == null ? loadConfigFromLocal('fixedCosts') || [] : raw;
   // Safety check: se è una stringa, parsa come JSON
   if(typeof val === 'string') {
     console.warn('getFixedCostsConfig: val is a string! Attempting JSON.parse...', val);
