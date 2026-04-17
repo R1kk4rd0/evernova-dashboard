@@ -171,7 +171,7 @@ function syncFatture() {
     invoices.forEach(inv => {
       if (byQontoId.has(inv.id)) {
         const ex = byQontoId.get(inv.id);
-        const nuovoStato = inv.invoice_type === 'credit_note' ? 'annullata' : mapStato(inv.status);
+        const nuovoStato = mapStato(inv.status);
         if (ex.stato !== nuovoStato) {
           ex.stato = nuovoStato;
           ex.updatedAt = new Date().toISOString();
@@ -191,12 +191,13 @@ function syncFatture() {
         clienteId, clienteNome,
         descrizione: inv.number || 'Fattura Qonto',
         importo: (inv.total_amount_cents || 0) / 100,
-        stato: inv.invoice_type === 'credit_note' ? 'annullata' : mapStato(inv.status),
+        stato: mapStato(inv.status),
         data: inv.issue_date || '', scadenza: inv.due_date || '',
         fonte: 'qonto',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         invoiceUrl: inv.invoice_url || '',
         itemTitolo: (inv.items && inv.items[0]) ? (inv.items[0].title || inv.items[0].description || '') : '',
+        tipoFattura: inv.invoice_type || 'standard',
       };
       appendRow(SHEET_NAMES.fatture, row, invoiceHeaders());
       byQontoId.set(inv.id, row);
@@ -448,7 +449,7 @@ function setupSheet(name, headers) {
 }
 
 function clientHeaders()    { return ['id','qontoId','nome','tipo','email','tel','piva','citta','note','createdAt','updatedAt']; }
-function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt','invoiceUrl','itemTitolo']; }
+function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt','invoiceUrl','itemTitolo','tipoFattura']; }
 function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
 function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt']; }
 function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fonte','createdAt','updatedAt','fornitoreId']; }
@@ -549,7 +550,7 @@ function linkSpeseFornitori() {
 function migrateInvoiceColumns() {
   const sheet = getSheet(SHEET_NAMES.fatture);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  ['invoiceUrl', 'itemTitolo'].forEach(col => {
+  ['invoiceUrl', 'itemTitolo', 'tipoFattura'].forEach(col => {
     if (!headers.includes(col)) {
       const newCol = sheet.getLastColumn() + 1;
       sheet.getRange(1, newCol).setValue(col).setFontWeight('bold');

@@ -80,6 +80,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .b-paused{background:var(--amber-bg);color:var(--amber)}
 .b-done{background:var(--surface2);color:var(--text3)}
 .b-proposal{background:var(--blue-bg);color:var(--blue)}
+.b-nota{background:var(--surface2);color:var(--text2)}
 .goal-item{margin-bottom:14px;cursor:pointer}
 .goal-header{display:flex;justify-content:space-between;margin-bottom:6px}
 .goal-label{font-size:13px;color:var(--text2);font-weight:500}
@@ -270,13 +271,14 @@ const projMargin=p=>Number(p.budget||0)-projCostTotal(p.id);
 
 function getStatoEffettivo(inv){
   if(!inv)return'draft';
+  if(String(inv.tipoFattura||'')===('credit_note'))return'nota';
   const s=String(inv.stato||'draft');
   if(s==='paid'||s==='draft'||s==='annullata')return s;
   if(inv.scadenza){const sc=new Date(inv.scadenza);const oggi=new Date();oggi.setHours(0,0,0,0);if(sc<oggi)return'overdue';}
   return'pending';
 }
 
-const statusBadge={paid:'<span class="badge b-paid">Pagata</span>',pending:'<span class="badge b-pending">In attesa</span>',draft:'<span class="badge b-draft">Bozza</span>',overdue:'<span class="badge b-overdue">Scaduta</span>',annullata:'<span class="badge b-draft">Annullata</span>'};
+const statusBadge={paid:'<span class="badge b-paid">Pagata</span>',pending:'<span class="badge b-pending">In attesa</span>',draft:'<span class="badge b-draft">Bozza</span>',overdue:'<span class="badge b-overdue">Scaduta</span>',annullata:'<span class="badge b-draft">Annullata</span>',nota:'<span class="badge b-nota">Nota di credito</span>'};
 const projBadge={active:'<span class="badge b-active">Attivo</span>',paused:'<span class="badge b-paused">In pausa</span>',done:'<span class="badge b-done">Completato</span>',proposal:'<span class="badge b-proposal">Proposta</span>'};
 const catColors={Software:'#4F46E5',Attrezzatura:'#EA580C',Marketing:'#D97706',Trasferta:'#DC2626',trasferta:'#DC2626',noleggio:'#D97706',software:'#4F46E5',Formazione:'#2563EB',Collaboratori:'#9333EA',Banca:'#6B7280',Tasse:'#DC2626',Ristorazione:'#D97706',Varie:'#9CA3AF',Utenze:'#2563EB',Altro:'#9CA3AF'};
 
