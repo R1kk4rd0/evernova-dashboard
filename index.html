@@ -954,12 +954,18 @@ function renderProjectDetail(id,c){
   <div class="two-col">
     <div class="card">
       <div class="card-header"><div class="card-title">Costi</div><button class="btn-ghost" style="font-size:12px" onclick="openAddCostModal('${id}')">+ Aggiungi</button></div>
-      ${costs.length?costs.map(cost=>`<div class="proj-cost-row">
-        <div style="width:8px;height:8px;border-radius:50%;background:${catColors[cost.categoria]||'#9CA3AF'};flex-shrink:0"></div>
-        <div style="flex:1"><div style="font-size:13px;font-weight:500">${cost.descrizione}</div><div style="font-size:11px;color:var(--text3)">${cost.categoria} · ${fmtDate(cost.data)}</div></div>
-        <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(cost.importo)}</div>
-        <span onclick="delCost('${cost.id}','${id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>
-      </div>`).join(''):'<div style="font-size:13px;color:var(--text3)">Nessun costo.</div>'}
+      ${costs.length?costs.map(cost=>{
+        const forn=cost.fornitoreId?DB.fornitori.find(f=>String(f.id)===String(cost.fornitoreId)):null;
+        return `<div class="proj-cost-row">
+          <div style="width:8px;height:8px;border-radius:50%;background:${catColors[cost.categoria]||'#9CA3AF'};flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500">${forn?forn.nome:cost.descrizione}</div>
+            <div style="font-size:11px;color:var(--text3)">${forn?cost.descrizione+' · ':''}${cost.categoria} · ${fmtDate(cost.data)}</div>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(cost.importo)}</div>
+          <span onclick="delCost('${cost.id}','${id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>
+        </div>`;
+      }).join(''):'<div style="font-size:13px;color:var(--text3)">Nessun costo.</div>'}
     </div>
     <div class="card">
       <div class="card-header"><div class="card-title">Conto economico</div></div>
