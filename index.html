@@ -1372,11 +1372,10 @@ function openAddCostModal(projId){
     if(!desc||!amt)return;
     const fornId=document.getElementById('mf_cforn').value;
     await save('saveCost',{id:uid(),progettoId:projId,descrizione:desc,categoria:document.getElementById('mf_ccat').value,importo:amt,data:document.getElementById('mf_cdate').value,fornitoreId:fornId||''});
-    // se fornitore selezionato e non già collegato al progetto, crea il link
     if(fornId){
       const giaCollegato=fornProgettiByProj(projId).some(fp=>String(fp.fornitoreId)===String(fornId));
       if(!giaCollegato){
-        await save('saveFornProg',{id:uid(),fornitoreId:fornId,progettoId:projId,ruolo:'',note:''});
+        try{await save('saveFornProg',{id:uid(),fornitoreId:fornId,progettoId:projId,ruolo:'',note:''});}catch(e){}
       }
     }
     closeModal();showDetail('project',projId);
