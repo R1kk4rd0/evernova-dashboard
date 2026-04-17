@@ -593,3 +593,80 @@ function debugFattureRecenti() {
     Logger.log(inv.issue_date + ' | ' + (inv.client?.name||'?') + ' | €' + (inv.total_amount_cents/100) + ' | status: ' + inv.status + ' | id: ' + inv.id.substring(0,8));
   });
 }
+
+function importProjects2026() {
+  ensureSheets();
+  const clienti   = sheetToObjects(SHEET_NAMES.clienti);
+  const byNome    = new Map(clienti.map(c => [normalizeNome(c.nome||''), c]));
+  const existing  = sheetToObjects(SHEET_NAMES.progetti);
+  const existNomi = new Set(existing.map(p => normalizeNome(p.nome||'')));
+
+  const dati = [
+    // num, data,         cliente,                              note,                            imponibile, pagato, fatturato, costi
+    ['078','2026-01-06','Lungoparma',                          'Cena Milano',                        200,  true,  true,     0],
+    ['079','2026-01-06','Lungoparma',                          'Video Parma castello + rimborso',    1000, true,  true,     0],
+    ['080','2026-01-06','Mapei',                               'Video Sassuolo',                     2200, false, true,     0],
+    ['081','2026-01-06','Montanari',                           'Video evento + rimborsi',            1200, true,  true,     0],
+    ['082','2026-01-06','Mapei',                               'Video Natale',                       6000, false, true,  1758.48],
+    ['',   '2026-02-09','NoSparo',                             'Contenuti set-ott-nov 2025',         1500, true,  true,     0],
+    ['083','2026-01-06','Mapei',                               'Foto Cafiero gocce',                  600, false, true,     0],
+    ['084','2026-01-06','Fitness and Beauty',                  'Video Macchinari',                   1100, true,  true,     0],
+    ['085','2026-01-06','Fresh Ramen',                         'Reels ristorante Ramen',              600, true,  true,     0],
+    ['086','2026-01-06','Advertor',                            'Editing reels dicembre',              950, true,  true,     0],
+    ['087','2026-01-31','Sant&Santi',                          'Video in studio',                     600, true,  true,     0],
+    ['088','2026-04-15','Intervista Matteo Della Valle Filippo','Intervista Filippo',                 1100, false, true,    0],
+    ['089','2026-02-09','Advertor',                            'Editing Gennaio',                     950, true,  true,     0],
+    ['090','2026-02-13','Fresh Ramen',                         'Reels ristorante Ramen feb',          850, true,  true,     0],
+    ['091','2026-03-02','Advertor',                            'Editing Febbraio',                    950, true,  true,     0],
+    ['092','2026-03-10','Cigierre',                            'Video e Foto Smashie',               1200, true,  true,     0],
+    ['093','2026-03-27','Mapei Roma',                          '3000 ambulacri',                     3000, false, true,   450],
+    ['094','2026-04-15','NoSparo',                             'Contenuti Marzo',                     500, true,  true,     0],
+    ['095','2026-04-15','Advertor',                            'Editing Marzo',                       950, true,  true,     0],
+    ['096','2026-04-15','Milena Fitness',                      'Video Fitness Credaro 1500',          1500, false, true,    0],
+    ['097','2026-04-15','MD Accademy',                         'Video MD Accademy Milano',            1500, false, true,    0],
+    ['098','2026-04-17','Gioele',                              'ADV Locale Gallarate',                 650, false, false,   0],
+  ];
+
+  let inseriti = 0, saltati = 0;
+  const progettiConCosti = [];
+
+  dati.forEach(([num, data, cliente, note, imponibile, pagato, fatturato, costi]) => {
+    const nome = num ? (num + ' - ' + note) : note;
+    if (existNomi.has(normalizeNome(nome))) { saltati++; return; }
+    const cl    = byNome.get(normalizeNome(cliente)) || null;
+    const stato = pagato ? 'done' : 'active';
+    const prog  = pagato ? 100 : (fatturato ? 80 : 40);
+    const id    = 'P26_' + (num || Date.now() + '_' + inseriti);
+    appendRow(SHEET_NAMES.progetti, {
+      id, nome,
+      clienteId:    cl ? String(cl.id) : '',
+      tipo:         'Video',
+      stato,
+      dataInizio:   data,
+      dataFine:     pagato ? data : '',
+      budget:       imponibile,
+      avanzamento:  prog,
+      responsabile: 'Riccardo',
+      note:         num ? 'Prog. ' + num : '',
+      createdAt:    new Date().toISOString(),
+      updatedAt:    new Date().toISOString(),
+    }, projectHeaders());
+    if (costi > 0) progettiConCosti.push({ id, costi });
+    inseriti++;
+  });
+
+  progettiConCosti.forEach(p => {
+    appendRow(SHEET_NAMES.costi, {
+      id:          'C26_' + p.id,
+      progettoId:  p.id,
+      descrizione: 'Costi produzione',
+      categoria:   'Collaboratori',
+      importo:     p.costi,
+      data:        new Date().toISOString().split('T')[0],
+      createdAt:   new Date().toISOString(),
+      updatedAt:   new Date().toISOString(),
+    }, costHeaders());
+  });
+
+  Logger.log('importProjects2026 — inseriti: ' + inseriti + ' | saltati (già presenti): ' + saltati + ' | costi inseriti: ' + progettiConCosti.length);
+}
