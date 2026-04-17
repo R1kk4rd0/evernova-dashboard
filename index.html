@@ -237,6 +237,7 @@ let selectMode=false,selectedClients=new Set();
 let filters={clients:{q:''},invoices:{q:'',anno:''},expenses:{q:'',anno:'',cat:''},projects:{q:'',stato:''}};
 let charts={},modalSaveFn=null;
 let invSort={col:'data',dir:'desc'};
+let projSort={col:'dataInizio',dir:'desc'};
 let revYear='';
 
 // ── AVATAR COLORS ────────────────────────────────────────────
@@ -819,45 +820,84 @@ async function saveClientNotes(id,val){const cl=clientById(id);if(cl){cl.note=va
 
 // ── PROJECTS ─────────────────────────────────────────────────
 function renderProjects(c){
+  const projNum=p=>{const m=String(p.nome||'').match(/^(\d+)/);return m?m[1]:'';};
+
   function filtered(){
     const q=(filters.projects.q||'').toLowerCase();
     const sf=filters.projects.stato||'';
-    return DB.progetti.filter(p=>{
+    let r=DB.progetti.filter(p=>{
       const mQ=!q||p.nome.toLowerCase().includes(q)||clientName(p.clienteId).toLowerCase().includes(q);
       const mS=!sf||p.stato===sf;
       return mQ&&mS;
     });
+    const col=projSort.col,dir=projSort.dir;
+    r.sort((a,b)=>{
+      let va,vb;
+      if(col==='budget'||col==='margine'||col==='costi'){
+        va=col==='margine'?projMargin(a):col==='costi'?projCostTotal(a.id):Number(a.budget||0);
+        vb=col==='margine'?projMargin(b):col==='costi'?projCostTotal(b.id):Number(b.budget||0);
+        return dir==='asc'?va-vb:vb-va;
+      }
+      if(col==='num'){va=projNum(a)||'zzz';vb=projNum(b)||'zzz';}
+      else{va=String(a[col]||'');vb=String(b[col]||'');}
+      return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    });
+    return r;
   }
-  function renderList(){
+
+  function arrow(col){const a=projSort.col===col?(projSort.dir==='asc'?'↑':'↓'):'↕';return '<span class="sort-arrow'+(projSort.col===col?' active':'')+'">'+a+'</span>';}
+
+  function renderTable(){
     const lista=filtered();
     const cnt=document.getElementById('projCount');
     if(cnt)cnt.textContent=lista.length+' / '+DB.progetti.length+' progetti';
-    const el=document.getElementById('projList');
-    if(!el)return;
-    el.innerHTML=lista.length?lista.map(p=>{
+    const tbody=document.getElementById('projTbody');
+    if(!tbody)return;
+    tbody.innerHTML=lista.length?lista.map(p=>{
       const costs=projCostTotal(p.id),margin=projMargin(p);
       const mPct=Number(p.budget||0)>0?Math.round(margin/Number(p.budget)*100):0;
-      const mc=mPct>=60?'margin-pos':mPct>=30?'margin-neu':'margin-neg';
-      return `<div class="project-row" onclick="showDetail('project','${p.id}')">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex:1"><div class="project-name">${p.nome}</div><div class="project-client">${clientName(p.clienteId)} · ${p.tipo||''}</div></div>
-          ${projBadge[p.stato]||''}
-          <div style="display:flex;gap:20px">
-            <div class="pstat"><div class="pstat-label">Budget</div><div class="pstat-val">${fmtEur(p.budget)}</div></div>
-            <div class="pstat"><div class="pstat-label">Costi</div><div class="pstat-val" style="color:var(--red)">${fmtEur(costs)}</div></div>
-            <div class="pstat"><div class="pstat-label">Margine</div><div class="pstat-val ${mc}">${fmtEur(margin)} (${mPct}%)</div></div>
-          </div>
-        </div>
-        <div class="prog-row"><span style="font-size:11px;color:var(--text3);min-width:55px">${fmtDate(p.dataInizio)}</span><div class="prog-track"><div class="prog-fill" style="width:${p.avanzamento||0}%"></div></div><div class="prog-pct">${p.avanzamento||0}%</div></div>
-      </div>`;
-    }).join(''):'<div style="text-align:center;padding:40px;color:var(--text3)">Nessun risultato.</div>';
+      const mc=mPct>=60?'var(--green)':mPct>=30?'var(--amber)':'var(--red)';
+      const num=projNum(p);
+      const nomePulito=num?p.nome.replace(/^\d+\s*-\s*/,''):p.nome;
+      return '<tr onclick="showDetail(\'project\',\''+p.id+'\')" style="cursor:pointer">'
+        +'<td style="color:var(--text3);font-size:12px;font-weight:600;width:40px">'+(num||'—')+'</td>'
+        +'<td><div style="font-size:13px;font-weight:600;color:var(--text)">'+nomePulito+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+clientName(p.clienteId)+'</div></td>'
+        +'<td>'+(projBadge[p.stato]||'')+'</td>'
+        +'<td style="font-size:13px;font-weight:600;text-align:right">'+fmtEur(p.budget)+'</td>'
+        +'<td style="font-size:13px;font-weight:600;color:var(--red);text-align:right">'+(costs>0?fmtEur(costs):'—')+'</td>'
+        +'<td style="font-size:13px;font-weight:700;color:'+mc+';text-align:right">'+fmtEur(margin)
+        +'<span style="font-size:11px;font-weight:500;margin-left:4px">('+mPct+'%)</span></td>'
+        +'<td style="color:var(--text3);font-size:12px">'+fmtDate(p.dataInizio)+'</td>'
+        +'<td onclick="event.stopPropagation()" style="text-align:right">'
+        +'<button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="openEditProjectModal(\''+p.id+'\')">✎</button></td>'
+        +'</tr>';
+    }).join(''):'<tr><td colspan="8" style="color:var(--text3);text-align:center;padding:32px">Nessun risultato.</td></tr>';
+
+    // update sortable headers
+    const thead=document.getElementById('projThead');
+    if(thead)thead.innerHTML='<tr>'
+      +'<th class="th-sort" onclick="sortProj(\'num\')" style="width:40px"># '+arrow('num')+'</th>'
+      +'<th class="th-sort" onclick="sortProj(\'nome\')">Nome '+arrow('nome')+'</th>'
+      +'<th>Stato</th>'
+      +'<th class="th-sort" onclick="sortProj(\'budget\')" style="text-align:right">Budget '+arrow('budget')+'</th>'
+      +'<th class="th-sort" onclick="sortProj(\'costi\')" style="text-align:right">Costi '+arrow('costi')+'</th>'
+      +'<th class="th-sort" onclick="sortProj(\'margine\')" style="text-align:right">Margine '+arrow('margine')+'</th>'
+      +'<th class="th-sort" onclick="sortProj(\'dataInizio\')">Data '+arrow('dataInizio')+'</th>'
+      +'<th></th>'
+      +'</tr>';
   }
+
   const active=DB.progetti.filter(p=>p.stato==='active');
+  const totalBudget=DB.progetti.reduce((s,p)=>s+Number(p.budget||0),0);
+  const totalMargine=DB.progetti.reduce((s,p)=>s+projMargin(p),0);
+
   c.innerHTML=`
-  <div class="kpi-row kpi-row-3" style="margin-bottom:24px">
-    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">MRR attivo</div></div><div class="kpi-value">${fmtEur(active.reduce((s,p)=>s+Number(p.budget||0),0))}</div><div class="kpi-footer"><span class="kpi-delta pos">${active.length} attivi</span></div></div>
-    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Pipeline</div></div><div class="kpi-value">${fmtEur(DB.progetti.reduce((s,p)=>s+Number(p.budget||0),0))}</div><div class="kpi-footer"><span class="kpi-delta neu">${DB.progetti.length} totali</span></div></div>
-    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Margine medio</div></div><div class="kpi-value">${fmtEur(DB.progetti.length?DB.progetti.reduce((s,p)=>s+projMargin(p),0)/DB.progetti.length:0)}</div></div>
+  <div class="kpi-row" style="margin-bottom:24px">
+    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Budget totale</div></div><div class="kpi-value">${fmtEur(totalBudget)}</div><div class="kpi-footer"><span class="kpi-delta neu">${DB.progetti.length} progetti</span></div></div>
+    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Attivi</div></div><div class="kpi-value">${active.length}</div><div class="kpi-footer"><span class="kpi-delta pos">${fmtEur(active.reduce((s,p)=>s+Number(p.budget||0),0))} in corso</span></div></div>
+    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Margine totale</div></div><div class="kpi-value">${fmtEur(totalMargine)}</div><div class="kpi-footer"><span class="kpi-delta ${totalBudget>0&&Math.round(totalMargine/totalBudget*100)>=50?'pos':'neu'}">${totalBudget>0?Math.round(totalMargine/totalBudget*100):0}% medio</span></div></div>
+    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Completati</div></div><div class="kpi-value">${DB.progetti.filter(p=>p.stato==='done').length}</div></div>
   </div>
   <div class="search-bar">
     <div class="search-wrap"><input class="search-input" id="projSearch" placeholder="Cerca per nome o cliente..."><button class="search-clear" id="projClear">×</button></div>
@@ -868,16 +908,28 @@ function renderProjects(c){
     </select>
     <span class="results-count" id="projCount"></span>
   </div>
-  <div id="projList"></div>`;
-  renderList();
+  <div class="card">
+    <table class="data-table">
+      <thead id="projThead"></thead>
+      <tbody id="projTbody"></tbody>
+    </table>
+  </div>`;
+
+  renderTable();
   const ps=document.getElementById('projSearch');
   ps.value=filters.projects.q||'';
-  ps.addEventListener('input',function(){filters.projects.q=this.value;document.getElementById('projClear').classList.toggle('vis',this.value.length>0);renderList();});
+  ps.addEventListener('input',function(){filters.projects.q=this.value;document.getElementById('projClear').classList.toggle('vis',this.value.length>0);renderTable();});
   const pst=document.getElementById('projStato');
   pst.value=filters.projects.stato||'';
-  pst.addEventListener('change',function(){filters.projects.stato=this.value;renderList();});
-  document.getElementById('projClear').addEventListener('click',function(){filters.projects.q='';filters.projects.stato='';ps.value='';pst.value='';this.classList.remove('vis');renderList();});
+  pst.addEventListener('change',function(){filters.projects.stato=this.value;renderTable();});
+  document.getElementById('projClear').addEventListener('click',function(){filters.projects.q='';filters.projects.stato='';ps.value='';pst.value='';this.classList.remove('vis');renderTable();});
   if(filters.projects.q)document.getElementById('projClear').classList.add('vis');
+}
+
+function sortProj(col){
+  if(projSort.col===col){projSort.dir=projSort.dir==='asc'?'desc':'asc';}
+  else{projSort.col=col;projSort.dir=col==='dataInizio'||col==='budget'||col==='margine'?'desc':'asc';}
+  const c=document.getElementById('mainContent');if(c)renderProjects(c);
 }
 
 // ── PROJECT DETAIL ───────────────────────────────────────────
