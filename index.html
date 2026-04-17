@@ -1480,7 +1480,7 @@ function addMonthlyClientModal(){
 function removeMonthlyClient(id){
   const list=getMonthlyClientsConfig().filter(c=>String(c.id)!==String(id));
   setMonthlyClientsConfig(list);
-  render();showMonthlyClientsModal();
+  setTimeout(()=>{render();setTimeout(()=>showMonthlyClientsModal(),50);},0);
 }
 
 // ── COSTI FISSI ──────────────────────────────────────────────
@@ -1516,12 +1516,13 @@ function editFixedCosts(){
 }
 function addExpenseFixedCostModal(){
   closeModal();
-  const expenses=DB.spese.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).slice(0,20);
-  if(!expenses.length){toast('Nessuna spesa trovata','error');return;}
-  openModal('Seleziona spesa ricorrente','',`
+  const allExpenses=DB.spese.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  if(!allExpenses.length){toast('Nessuna spesa trovata','error');return;}
+  openModal('Seleziona spesa ricorrente','Scrivi per cercare',`
+    <div class="modal-field"><label>Cerca</label><input id="mf_exp_search" placeholder="es. affitto, software..." oninput="(function(){const q=document.getElementById('mf_exp_search').value.toLowerCase();const opts=document.querySelectorAll('#mf_exp option:not(:first-child)');opts.forEach(o=>{o.style.display=q&&!o.textContent.toLowerCase().includes(q)?'none':''});})()" style="margin-bottom:8px"></div>
     <div class="modal-field"><label>Spesa</label><select id="mf_exp">
       <option value="">— scegli una spesa —</option>
-      ${expenses.map(e=>`<option value="${e.id}">${e.descrizione||'—'} (${fmtEur(e.importo)} · ${fmtDate(e.data)})</option>`).join('')}
+      ${allExpenses.map(e=>`<option value="${e.id}">${e.descrizione||'—'} (${fmtEur(e.importo)} · ${fmtDate(e.data)})</option>`).join('')}
     </select></div>
   `,async()=>{
     const expId=document.getElementById('mf_exp').value;
