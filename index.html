@@ -932,14 +932,12 @@ function renderProjectDetail(id,c){
         const f=DB.fornitori.find(x=>String(x.id)===String(fp.fornitoreId));
         if(!f)return '';
         const [bg,fg]=avatarColor(f.nome||'');
-        return \`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div class="avatar" style="background:\${bg};color:\${fg};width:34px;height:34px;font-size:12px;border-radius:8px;flex-shrink:0">\${initials(f.nome||'')}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:500">\${f.nome}</div>
-            <div style="font-size:11px;color:var(--text3)">\${fp.ruolo||f.categoria||''}</div>
-          </div>
-          <span onclick="delFornProg('\${fp.id}','${id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>
-        </div>\`;
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">'
+          +'<div class="avatar" style="background:'+bg+';color:'+fg+';width:34px;height:34px;font-size:12px;border-radius:8px;flex-shrink:0">'+initials(f.nome||'')+'</div>'
+          +'<div style="flex:1"><div style="font-size:13px;font-weight:500">'+f.nome+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">'+(fp.ruolo||f.categoria||'')+'</div></div>'
+          +'<span onclick="delFornProg(\''+fp.id+'\',\''+id+'\')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>'
+          +'</div>';
       }).join('');
     })()}
   </div>`;
