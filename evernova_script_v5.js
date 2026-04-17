@@ -449,7 +449,7 @@ function clientHeaders()    { return ['id','qontoId','nome','tipo','email','tel'
 function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt']; }
 function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
 function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt']; }
-function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fornitoreId','fonte','createdAt','updatedAt']; }
+function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fonte','createdAt','updatedAt','fornitoreId']; }
 function fornitoriHeaders() { return ['id','nome','categoria','email','tel','tariffa','note','createdAt','updatedAt']; }
 
 function syncBeneficiari() {
