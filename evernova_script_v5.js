@@ -195,6 +195,8 @@ function syncFatture() {
         data: inv.issue_date || '', scadenza: inv.due_date || '',
         fonte: 'qonto',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        invoiceUrl: inv.invoice_url || '',
+        itemTitolo: (inv.items && inv.items[0]) ? (inv.items[0].title || inv.items[0].description || '') : '',
       };
       appendRow(SHEET_NAMES.fatture, row, invoiceHeaders());
       byQontoId.set(inv.id, row);
@@ -446,7 +448,7 @@ function setupSheet(name, headers) {
 }
 
 function clientHeaders()    { return ['id','qontoId','nome','tipo','email','tel','piva','citta','note','createdAt','updatedAt']; }
-function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt']; }
+function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt','invoiceUrl','itemTitolo']; }
 function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
 function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt']; }
 function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fonte','createdAt','updatedAt','fornitoreId']; }
@@ -542,6 +544,20 @@ function linkSpeseFornitori() {
   }
   Logger.log('linkSpeseFornitori — collegate: ' + linked + ' | già collegate: ' + skipped + ' | totale: ' + (rows.length - 1));
   return { linked, skipped };
+}
+
+function migrateInvoiceColumns() {
+  const sheet = getSheet(SHEET_NAMES.fatture);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  ['invoiceUrl', 'itemTitolo'].forEach(col => {
+    if (!headers.includes(col)) {
+      const newCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, newCol).setValue(col).setFontWeight('bold');
+      Logger.log('Aggiunta colonna: ' + col);
+    } else {
+      Logger.log('Colonna già presente: ' + col);
+    }
+  });
 }
 
 function debugFatturaRaw() {

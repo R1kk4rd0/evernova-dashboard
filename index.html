@@ -629,9 +629,14 @@ function openInvDetail(id){
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Cliente</div>
       <div style="font-size:13px;font-weight:500">${inv.clienteNome||clientName(inv.clienteId)}</div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
+    ${inv.itemTitolo?`<div style="background:var(--surface2);border-radius:8px;padding:11px 12px;margin-bottom:8px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Descrizione</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text)">${inv.itemTitolo}</div>
+    </div>`:''}
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
       <span style="background:var(--surface2);padding:3px 10px;border-radius:4px;font-size:11px;color:var(--text3)">${isQonto?'Qonto':'Manuale'}</span>
       <span style="background:var(--surface2);padding:3px 10px;border-radius:4px;font-size:11px;color:var(--text3);font-family:monospace">${inv.descrizione||''}</span>
+      ${inv.invoiceUrl?`<a href="${inv.invoiceUrl}" target="_blank" style="margin-left:auto;font-size:12px;color:var(--accent);font-weight:500;text-decoration:none">Apri su Qonto ↗</a>`:''}
     </div>
     ${!isQonto?`<div style="border-top:1px solid var(--border);padding-top:14px">
       <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:10px">Modifica</div>
