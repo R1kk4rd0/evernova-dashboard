@@ -470,7 +470,7 @@ function setupSheet(name, headers) {
 function clientHeaders()    { return ['id','qontoId','nome','tipo','email','tel','piva','citta','note','createdAt','updatedAt']; }
 function invoiceHeaders()   { return ['id','qontoId','clienteId','clienteNome','descrizione','importo','stato','data','scadenza','fonte','createdAt','updatedAt','invoiceUrl','itemTitolo','tipoFattura']; }
 function projectHeaders()   { return ['id','nome','clienteId','tipo','stato','dataInizio','dataFine','budget','avanzamento','responsabile','note','createdAt','updatedAt']; }
-function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','createdAt','updatedAt']; }
+function costHeaders()      { return ['id','progettoId','descrizione','categoria','importo','data','fornitoreId','createdAt','updatedAt']; }
 function expenseHeaders()   { return ['id','qontoId','descrizione','categoria','categoriaQonto','importo','data','progettoId','fonte','createdAt','updatedAt','fornitoreId']; }
 function fornitoriHeaders()   { return ['id','nome','categoria','email','tel','tariffa','note','createdAt','updatedAt']; }
 function fornProgettiHeaders(){ return ['id','fornitoreId','progettoId','ruolo','note','createdAt','updatedAt']; }

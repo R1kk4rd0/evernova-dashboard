@@ -994,7 +994,19 @@ function renderProjectDetail(id,c){
     })()}
   </div>`;
 }
-async function delCost(costId,projId){await del('deleteCost',costId);showDetail('project',projId);}
+async function delCost(costId,projId){
+  const cost=DB.costi.find(x=>String(x.id)===String(costId));
+  const fornId=cost?String(cost.fornitoreId||''):'';
+  await del('deleteCost',costId);
+  if(fornId){
+    const altriCosti=DB.costi.some(c=>String(c.progettoId)===String(projId)&&String(c.fornitoreId)===String(fornId));
+    if(!altriCosti){
+      const fp=DB.fornProgetti.find(x=>String(x.fornitoreId)===String(fornId)&&String(x.progettoId)===String(projId));
+      if(fp){await apiPost('deleteFornProg',{id:fp.id});await loadAll();}
+    }
+  }
+  showDetail('project',projId);
+}
 async function saveProjNotes(id,val){const p=DB.progetti.find(x=>String(x.id)===String(id));if(p){p.note=val;await save('saveProject',p);}}
 
 // ── EXPENSES ─────────────────────────────────────────────────
@@ -1359,7 +1371,7 @@ function openAddCostModal(projId){
     const amt=parseFloat(document.getElementById('mf_camt').value);
     if(!desc||!amt)return;
     const fornId=document.getElementById('mf_cforn').value;
-    await save('saveCost',{id:uid(),progettoId:projId,descrizione:desc,categoria:document.getElementById('mf_ccat').value,importo:amt,data:document.getElementById('mf_cdate').value});
+    await save('saveCost',{id:uid(),progettoId:projId,descrizione:desc,categoria:document.getElementById('mf_ccat').value,importo:amt,data:document.getElementById('mf_cdate').value,fornitoreId:fornId||''});
     // se fornitore selezionato e non già collegato al progetto, crea il link
     if(fornId){
       const giaCollegato=fornProgettiByProj(projId).some(fp=>String(fp.fornitoreId)===String(fornId));
