@@ -376,8 +376,9 @@ function readGoals() {
 }
 
 function setConfigValue(chiave, valore) {
-  Logger.log('setConfigValue: ' + chiave + ' = ' + String(valore).substring(0, 100));
+  Logger.log('🔴 setConfigValue ENTRY: chiave=' + chiave + ', valore type=' + typeof valore + ', valore=' + String(valore).substring(0, 150));
   setConfig(chiave, valore);
+  Logger.log('🟢 setConfigValue EXIT: saved to sheet');
   return { ok: true };
 }
 
@@ -410,19 +411,37 @@ function deleteRow(sheetName, id) {
   return { ok:false, error:'Non trovato: ' + id };
 }
 
+function setConfig(key, value) {
+  Logger.log('setConfig CALLED: key=' + key + ', value type=' + typeof value + ', value substring=' + String(value).substring(0, 100));
+  const sheet = getSheet(SHEET_NAMES.config);
+  const data  = sheet.getDataRange().getValues();
+  Logger.log('setConfig: Sheet has ' + data.length + ' rows');
+  for (let i = 1; i < data.length; i++) {
+    Logger.log('Row ' + i + ': [' + data[i][0] + ', ' + String(data[i][1]).substring(0, 50) + ']');
+    if (data[i][0] === key) { 
+      Logger.log('Found existing key at row ' + (i+1) + ', updating');
+      sheet.getRange(i + 1, 2).setValue(value);
+      Logger.log('Updated value');
+      return; 
+    }
+  }
+  Logger.log('Key not found, appending new row');
+  sheet.appendRow([key, value]);
+  Logger.log('Appended new row with key=' + key + ', value=' + String(value).substring(0, 100));
+}
 function getConfig(key) {
   const sheet = getSheet(SHEET_NAMES.config);
   const data  = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) { if (data[i][0] === key) return data[i][1]; }
-  return null;
-}
-function setConfig(key, value) {
-  const sheet = getSheet(SHEET_NAMES.config);
-  const data  = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === key) { sheet.getRange(i + 1, 2).setValue(value); return; }
+  Logger.log('getConfig(' + key + '): Sheet has ' + data.length + ' rows');
+  for (let i = 1; i < data.length; i++) { 
+    Logger.log('Row ' + i + ': key=' + data[i][0] + ', value=' + String(data[i][1]).substring(0, 50));
+    if (data[i][0] === key) {
+      Logger.log('Found! Returning: ' + String(data[i][1]).substring(0, 100));
+      return data[i][1]; 
+    }
   }
-  sheet.appendRow([key, value]);
+  Logger.log('Key not found, returning null');
+  return null;
 }
 
 function qontoFetch(path) {
