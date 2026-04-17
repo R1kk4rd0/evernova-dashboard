@@ -401,11 +401,25 @@ function renderOverview(c){
     <div class="card"><div class="card-header"><div class="card-title">Clienti recenti</div><span style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:500" onclick="navTo('clients')">Vedi tutti →</span></div><div id="clSmall"></div></div>
   </div>`;
 
-  document.getElementById('goalsEl').innerHTML=DB.goals.map((g,i)=>{
-    const pct=Math.min(100,Math.round(Number(g.current||0)/Math.max(Number(g.target||1),1)*100));
-    const col=pct>=80?'#16A34A':pct>=50?'#4F46E5':'#D97706';
-    return `<div class="goal-item" onclick="editGoal(${i})"><div class="goal-header"><span class="goal-label">${g.label}</span><span class="goal-nums">${g.current}/${g.target} · ${pct}%</span></div><div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
-  }).join('')||'<div style="font-size:13px;color:var(--text3)">Nessun obiettivo.</div>';
+  document.getElementById('goalsEl').innerHTML=(()=>{
+    let html='';
+    if(DB.goals.length>0){
+      html=DB.goals.map((g,i)=>{
+        const pct=Math.min(100,Math.round(Number(g.current||0)/Math.max(Number(g.target||1),1)*100));
+        const col=pct>=80?'#16A34A':pct>=50?'#4F46E5':'#D97706';
+        const click=i===0?'onclick="showMonthlyClientsModal()"':'onclick="editGoal('+i+')"';
+        return `<div class="goal-item" ${click}><div class="goal-header"><span class="goal-label">${g.label}</span><span class="goal-nums">${g.current}/${g.target} · ${pct}%</span></div><div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
+      }).join('');
+    }else{html='<div style="font-size:13px;color:var(--text3)">Nessun obiettivo.</div>';}
+    const fixedCosts=getFixedCosts();
+    html+=`<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="goal-item" onclick="editFixedCosts()">
+        <div class="goal-header"><span class="goal-label">Costi fissi mensili</span><span class="goal-nums" style="color:var(--red)">${fmtEur(fixedCosts)}</span></div>
+        <div style="height:6px;background:var(--surface2);border-radius:3px"></div>
+      </div>
+    </div>`;
+    return html;
+  })();
 
   const lmap={paid:'Pagata',pending:'In attesa',draft:'Bozza',overdue:'Scaduta'};
   const bmap={paid:'b-paid',pending:'b-pending',draft:'b-draft',overdue:'b-overdue'};
@@ -1392,6 +1406,64 @@ function openAddCostModal(projId){
     }
     closeModal();showDetail('project',projId);
   });
+}
+function getMonthlyClients(){
+  const m=new Map();
+  DB.fatture.forEach(f=>{
+    if(getStatoEffettivo(f)!=='paid')return;
+    const cid=String(f.clienteId),cname=f.clienteNome||clientName(cid);
+    const ym=(f.data||'').substring(0,7);
+    if(!m.has(cid))m.set(cid,{id:cid,nome:cname,months:new Set()});
+    m.get(cid).months.add(ym);
+  });
+  return Array.from(m.values()).filter(c=>c.months.size>=2).sort((a,b)=>(b.months.size)-(a.months.size));
+}
+function getFixedCosts(){
+  const raw=getConfig('fixedCosts');
+  return parseFloat(raw)||0;
+}
+function getConfig(key){
+  const raw=localStorage.getItem('evernova_'+key);
+  return raw?JSON.parse(raw):null;
+}
+function setConfig(key,val){
+  localStorage.setItem('evernova_'+key,JSON.stringify(val));
+}
+function showMonthlyClientsModal(){
+  const clients=getMonthlyClients();
+  let body='<div style="max-height:350px;overflow-y:auto">';
+  if(!clients.length){
+    body+='<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px">Nessun cliente ricorrente trovato.</div>';
+  }else{
+    body+=clients.map((c,i)=>{
+      const invs=clientInvs(c.id).filter(f=>getStatoEffettivo(f)==='paid');
+      const tot=invs.reduce((s,f)=>s+Number(f.importo||0),0);
+      const [bg,fg]=avatarColor(c.nome);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:${bg};color:${fg};font-size:11px;font-weight:600;flex-shrink:0">${initials(c.nome)}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.nome}</div>
+          <div style="font-size:11px;color:var(--text3)">${c.months.size} mesi · ${invs.length} fatture</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmtEur(tot)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  body+='</div>';
+  openModal('Clienti ricorrenti','Fatture pagate negli ultimi mesi',body,(()=>closeModal()),'Chiudi');
+}
+function editFixedCosts(){
+  const current=getFixedCosts();
+  openModal('Costi fissi mensili','€/mese',`
+    <div class="modal-field"><label>Importo €</label><input id="mf_fixed" type="number" value="${current}" step="100"></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">Includi: affitto, utenze, assicurazioni, software ricorrenti, abbonamenti...</div>
+  `,async()=>{
+    const val=parseFloat(document.getElementById('mf_fixed').value)||0;
+    setConfig('fixedCosts',val);
+    closeModal();render();
+  },'Salva');
 }
 function editGoal(i){const g=DB.goals[i];openModal('Aggiorna obiettivo',g.label,`<div class="modal-row"><div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div><div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;await save('saveGoals',{goals:DB.goals});closeModal();render();});}
 
