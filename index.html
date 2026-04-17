@@ -1412,16 +1412,16 @@ function openAddCostModal(projId){
 }
 // ── CONFIG STORAGE (Google Sheet) ──────────────────────────────────────────
 function getConfig(key){return DB.configCache[key]||null;}
-function setConfigAsync(key,val){
+async function setConfigAsync(key,val){
   DB.configCache[key]=val;
-  apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)}).catch(e=>console.error('Config save error:',e));
+  await apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)});
 }
 function getMonthlyClientsConfig(){return getConfig('monthlyClients')||[];}
-function setMonthlyClientsConfig(list){setConfigAsync('monthlyClients',list);}
+async function setMonthlyClientsConfig(list){await setConfigAsync('monthlyClients',list);}
 function getMonthlyClientsExcluded(){return getConfig('monthlyClientsExcluded')||[];}
-function setMonthlyClientsExcluded(list){setConfigAsync('monthlyClientsExcluded',list);}
+async function setMonthlyClientsExcluded(list){await setConfigAsync('monthlyClientsExcluded',list);}
 function getFixedCostsConfig(){return getConfig('fixedCosts')||[];}
-function setFixedCostsConfig(list){setConfigAsync('fixedCosts',list);}
+async function setFixedCostsConfig(list){await setConfigAsync('fixedCosts',list);}
 
 // ── CLIENTI RICORRENTI ──────────────────────────────────────────
 function getMonthlyClients(){
@@ -1495,15 +1495,14 @@ function removeMonthlyClient(id){
   const isManual=manual.some(m=>String(m.id)===String(id));
   if(isManual){
     const list=manual.filter(c=>String(c.id)!==String(id));
-    setMonthlyClientsConfig(list);
+    setMonthlyClientsConfig(list).then(()=>{render();showMonthlyClientsModal();}).catch(e=>{console.error(e);showMonthlyClientsModal();});
   }else{
     const excluded=getMonthlyClientsExcluded();
     if(!excluded.some(e=>String(e)===String(id))){
       excluded.push(id);
-      setMonthlyClientsExcluded(excluded);
+      setMonthlyClientsExcluded(excluded).then(()=>{render();showMonthlyClientsModal();}).catch(e=>{console.error(e);showMonthlyClientsModal();});
     }
   }
-  showMonthlyClientsModal();
 }
 
 // ── COSTI FISSI ──────────────────────────────────────────────
@@ -1554,8 +1553,8 @@ function addExpenseFixedCostModal(){
     if(!exp){toast('Spesa non trovata','error');return;}
     const list=getFixedCostsConfig();
     list.push({id:uid(),tipo:'expense',spesaId:exp.id,importo:Number(exp.importo||0),descrizione:exp.descrizione||'Spesa'});
-    setFixedCostsConfig(list);
-    closeModal();editFixedCosts();
+    await setFixedCostsConfig(list);
+    closeModal();render();editFixedCosts();
   },'Aggiungi');
 }
 function addManualFixedCostModal(){
@@ -1569,14 +1568,13 @@ function addManualFixedCostModal(){
     if(!desc||!amt){toast('Compila descrizione e importo','error');return;}
     const list=getFixedCostsConfig();
     list.push({id:uid(),tipo:'manual',importo:amt,descrizione:desc});
-    setFixedCostsConfig(list);
-    closeModal();editFixedCosts();
+    await setFixedCostsConfig(list);
+    closeModal();render();editFixedCosts();
   },'Aggiungi');
 }
 function removeFixedCost(id){
   const list=getFixedCostsConfig().filter(c=>String(c.id)!==String(id));
-  setFixedCostsConfig(list);
-  editFixedCosts();
+  setFixedCostsConfig(list).then(()=>{render();editFixedCosts();}).catch(e=>{console.error(e);editFixedCosts();});
 }
 function editGoal(i){const g=DB.goals[i];openModal('Aggiorna obiettivo',g.label,`<div class="modal-row"><div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div><div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;await save('saveGoals',{goals:DB.goals});closeModal();render();});}
 
