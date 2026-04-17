@@ -323,7 +323,7 @@ function matchFornitore(descNorm, fornitori) {
 }
 
 function mapStato(s) {
-  const m = { paid:'paid', draft:'draft', pending:'pending', unpaid:'pending', cancelled:'annullata' };
+  const m = { paid:'paid', draft:'draft', pending:'pending', unpaid:'pending', cancelled:'annullata', canceled:'annullata' };
   return m[s] || s || 'draft';
 }
 
