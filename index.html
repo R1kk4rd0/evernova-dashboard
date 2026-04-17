@@ -1407,63 +1407,152 @@ function openAddCostModal(projId){
     closeModal();showDetail('project',projId);
   });
 }
+// ── CONFIG STORAGE ──────────────────────────────────────────
+function getConfig(key){const raw=localStorage.getItem('evernova_'+key);return raw?JSON.parse(raw):null;}
+function setConfig(key,val){localStorage.setItem('evernova_'+key,JSON.stringify(val));}
+function getMonthlyClientsConfig(){return getConfig('monthlyClients')||[];}
+function setMonthlyClientsConfig(list){setConfig('monthlyClients',list);}
+function getFixedCostsConfig(){return getConfig('fixedCosts')||[];}
+function setFixedCostsConfig(list){setConfig('fixedCosts',list);}
+
+// ── CLIENTI RICORRENTI ──────────────────────────────────────────
 function getMonthlyClients(){
-  const m=new Map();
+  const auto=new Map();
   DB.fatture.forEach(f=>{
     if(getStatoEffettivo(f)!=='paid')return;
     const cid=String(f.clienteId),cname=f.clienteNome||clientName(cid);
     const ym=(f.data||'').substring(0,7);
-    if(!m.has(cid))m.set(cid,{id:cid,nome:cname,months:new Set()});
-    m.get(cid).months.add(ym);
+    if(!auto.has(cid))auto.set(cid,{id:cid,nome:cname,months:new Set(),isManuale:false,importoMensile:0});
+    auto.get(cid).months.add(ym);
   });
-  return Array.from(m.values()).filter(c=>c.months.size>=2).sort((a,b)=>(b.months.size)-(a.months.size));
+  const autoList=Array.from(auto.values()).filter(c=>c.months.size>=2).sort((a,b)=>(b.months.size)-(a.months.size));
+  const manual=getMonthlyClientsConfig();
+  const allList=[...autoList,...manual];
+  const seenIds=new Set();
+  return allList.filter(c=>{
+    const key=String(c.id);if(seenIds.has(key))return false;
+    seenIds.add(key);return true;
+  });
 }
 function getFixedCosts(){
-  const raw=getConfig('fixedCosts');
-  return parseFloat(raw)||0;
-}
-function getConfig(key){
-  const raw=localStorage.getItem('evernova_'+key);
-  return raw?JSON.parse(raw):null;
-}
-function setConfig(key,val){
-  localStorage.setItem('evernova_'+key,JSON.stringify(val));
+  const list=getFixedCostsConfig();
+  return list.reduce((s,c)=>s+Number(c.importo||0),0);
 }
 function showMonthlyClientsModal(){
   const clients=getMonthlyClients();
-  let body='<div style="max-height:350px;overflow-y:auto">';
+  const manual=getMonthlyClientsConfig();
+  let body='<div style="max-height:380px;overflow-y:auto">';
   if(!clients.length){
-    body+='<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px">Nessun cliente ricorrente trovato.</div>';
+    body+='<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px">Nessun cliente ricorrente.</div>';
   }else{
     body+=clients.map((c,i)=>{
-      const invs=clientInvs(c.id).filter(f=>getStatoEffettivo(f)==='paid');
-      const tot=invs.reduce((s,f)=>s+Number(f.importo||0),0);
       const [bg,fg]=avatarColor(c.nome);
+      const isMan=manual.some(m=>String(m.id)===String(c.id));
+      const badge=isMan?'<span style="background:var(--accent-light);color:var(--accent);font-size:9px;padding:2px 6px;border-radius:3px;font-weight:600">Manuale</span>':'';
       return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)">
         <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:${bg};color:${fg};font-size:11px;font-weight:600;flex-shrink:0">${initials(c.nome)}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.nome}</div>
-          <div style="font-size:11px;color:var(--text3)">${c.months.size} mesi · ${invs.length} fatture</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.nome} ${badge}</div>
+          <div style="font-size:11px;color:var(--text3)">${c.importoMensile?fmtEur(c.importoMensile)+'/mese':'da storico'}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmtEur(tot)}</div>
-        </div>
+        <button class="btn-danger" style="flex-shrink:0;padding:4px 8px;font-size:11px" onclick="removeMonthlyClient('${c.id}')">Rimuovi</button>
       </div>`;
     }).join('');
   }
-  body+='</div>';
-  openModal('Clienti ricorrenti','Fatture pagate negli ultimi mesi',body,(()=>closeModal()),'Chiudi');
+  body+=`</div><button class="btn-primary" style="width:100%;margin-top:12px" onclick="addMonthlyClientModal()">+ Aggiungi cliente</button>`;
+  openModal('Clienti ricorrenti','Fatture pagate + manuali',body,(()=>closeModal()),'Chiudi');
 }
-function editFixedCosts(){
-  const current=getFixedCosts();
-  openModal('Costi fissi mensili','€/mese',`
-    <div class="modal-field"><label>Importo €</label><input id="mf_fixed" type="number" value="${current}" step="100"></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px">Includi: affitto, utenze, assicurazioni, software ricorrenti, abbonamenti...</div>
+function addMonthlyClientModal(){
+  closeModal();
+  openModal('Aggiungi cliente ricorrente','',`
+    <div class="modal-field"><label>Nome cliente</label><input id="mf_mcname" placeholder="es. Acme Corp"></div>
+    <div class="modal-field"><label>Importo mensile €</label><input id="mf_mcamt" type="number" placeholder="es. 2500"></div>
   `,async()=>{
-    const val=parseFloat(document.getElementById('mf_fixed').value)||0;
-    setConfig('fixedCosts',val);
-    closeModal();render();
-  },'Salva');
+    const nome=document.getElementById('mf_mcname').value.trim();
+    const amt=parseFloat(document.getElementById('mf_mcamt').value)||0;
+    if(!nome||!amt){toast('Compila nome e importo','error');return;}
+    const list=getMonthlyClientsConfig();
+    list.push({id:uid(),nome,importoMensile:amt,isManuale:true});
+    setMonthlyClientsConfig(list);
+    closeModal();render();showMonthlyClientsModal();
+  },'Aggiungi');
+}
+function removeMonthlyClient(id){
+  const list=getMonthlyClientsConfig().filter(c=>String(c.id)!==String(id));
+  setMonthlyClientsConfig(list);
+  render();showMonthlyClientsModal();
+}
+
+// ── COSTI FISSI ──────────────────────────────────────────────
+function editFixedCosts(){
+  const list=getFixedCostsConfig();
+  const total=getFixedCosts();
+  let body='<div style="max-height:320px;overflow-y:auto">';
+  if(list.length>0){
+    body+=list.map(c=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${c.descrizione}</div>
+          <div style="font-size:11px;color:var(--text3)">${c.tipo==='expense'?'Da spesa':'Manuale'}</div>
+        </div>
+        <div style="text-align:right;margin-right:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmtEur(c.importo)}</div>
+        </div>
+        <button class="btn-danger" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="removeFixedCost('${c.id}')">×</button>
+      </div>
+    `).join('');
+  }else{
+    body+='<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Nessun costo fisso.</div>';
+  }
+  body+=`</div>
+  <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-top:12px;font-size:13px;font-weight:600">
+    Totale: ${fmtEur(total)}
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn-primary" style="flex:1" onclick="addExpenseFixedCostModal()">+ Da storico spese</button>
+    <button class="btn-primary" style="flex:1" onclick="addManualFixedCostModal()">+ Manuale</button>
+  </div>`;
+  openModal('Costi fissi mensili','Transazioni + manuali',body,(()=>closeModal()),'Chiudi');
+}
+function addExpenseFixedCostModal(){
+  closeModal();
+  const expenses=DB.spese.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).slice(0,20);
+  if(!expenses.length){toast('Nessuna spesa trovata','error');return;}
+  openModal('Seleziona spesa ricorrente','',`
+    <div class="modal-field"><label>Spesa</label><select id="mf_exp">
+      <option value="">— scegli una spesa —</option>
+      ${expenses.map(e=>`<option value="${e.id}">${e.descrizione||'—'} (${fmtEur(e.importo)} · ${fmtDate(e.data)})</option>`).join('')}
+    </select></div>
+  `,async()=>{
+    const expId=document.getElementById('mf_exp').value;
+    if(!expId){toast('Seleziona una spesa','error');return;}
+    const exp=DB.spese.find(e=>String(e.id)===String(expId));
+    if(!exp){toast('Spesa non trovata','error');return;}
+    const list=getFixedCostsConfig();
+    list.push({id:uid(),tipo:'expense',spesaId:exp.id,importo:Number(exp.importo||0),descrizione:exp.descrizione||'Spesa'});
+    setFixedCostsConfig(list);
+    closeModal();render();editFixedCosts();
+  },'Aggiungi');
+}
+function addManualFixedCostModal(){
+  closeModal();
+  openModal('Costo fisso manuale','',`
+    <div class="modal-field"><label>Descrizione</label><input id="mf_mdesc" placeholder="es. Affitto ufficio"></div>
+    <div class="modal-field"><label>Importo mensile €</label><input id="mf_mamt" type="number" placeholder="es. 1200"></div>
+  `,async()=>{
+    const desc=document.getElementById('mf_mdesc').value.trim();
+    const amt=parseFloat(document.getElementById('mf_mamt').value)||0;
+    if(!desc||!amt){toast('Compila descrizione e importo','error');return;}
+    const list=getFixedCostsConfig();
+    list.push({id:uid(),tipo:'manual',importo:amt,descrizione:desc});
+    setFixedCostsConfig(list);
+    closeModal();render();editFixedCosts();
+  },'Aggiungi');
+}
+function removeFixedCost(id){
+  const list=getFixedCostsConfig().filter(c=>String(c.id)!==String(id));
+  setFixedCostsConfig(list);
+  render();editFixedCosts();
 }
 function editGoal(i){const g=DB.goals[i];openModal('Aggiorna obiettivo',g.label,`<div class="modal-row"><div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div><div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;await save('saveGoals',{goals:DB.goals});closeModal();render();});}
 
