@@ -320,8 +320,9 @@ async function loadAll(){
     ['fixedCosts','monthlyClients','monthlyClientsExcluded','goals'].forEach(key=>{
       const localValue = loadConfigFromLocal(key);
       if(localValue !== null){
+        console.log('⚠️ loadAll sync:', key, '- local value:', localValue, 'cache was:', DB.configCache[key]);
         DB.configCache[key] = localValue;
-        console.log('Overriding config', key, 'with localStorage value:', localValue);
+        console.log('✓ Updated cache to local value:', DB.configCache[key]);
         setConfigAsync(key, localValue).catch(e=>console.warn('Background sync failed for', key, e));
       }
     });
@@ -375,6 +376,7 @@ function showDetail(type,id){detailCtx={type,id};render();}
 function backToList(){detailCtx={type:null,id:null};render();}
 
 function render(){
+  console.log('🎨 render() CALLED - currentPage:', currentPage, 'cache monthlyClients length:', DB.configCache['monthlyClients']?.length);
   destroyCharts();
   const c=document.getElementById('mainContent');
   if(detailCtx.type==='client'){renderClientDetail(detailCtx.id,c);return;}
@@ -387,6 +389,7 @@ function render(){
   else if(currentPage==='expenses')renderExpenses(c);
   else if(currentPage==='suppliers')renderSuppliers(c);
   else if(currentPage==='sync')renderSync(c);
+  console.log('🎨 render() DONE');
 }
 
 function setBreadcrumb(){
@@ -1471,22 +1474,38 @@ function getConfig(key){
   return val;
 }
 async function setConfigAsync(key,val){
-  console.log('setConfigAsync:', key, 'val length:', val.length, 'val:', val);
+  console.log('🟣 setConfigAsync ENTRY:', key, 'val.length:', val?.length, 'type:', typeof val);
+  console.log('   Updating DB.configCache['+key+'] to:', val);
   DB.configCache[key]=val;
+  console.log('   Cache now:', DB.configCache[key]);
   saveConfigToLocal(key,val);
   try {
     const result = await apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)});
-    console.log('setConfigAsync response:', result);
+    console.log('🟢 setConfigAsync EXIT:', key, 'response:', result);
+    console.log('   Cache after POST:', DB.configCache[key]);
     return result;
   } catch(e) {
-    console.warn('setConfigAsync backend failed, kept local only', key, e);
+    console.warn('⚠️ setConfigAsync backend FAILED:', key, e);
     return { ok:false, error: String(e.message || e) };
   }
 }
 function getMonthlyClientsConfig(){
   const raw = getConfig('monthlyClients');
+  console.log('📋 getMonthlyClientsConfig - raw from cache:', raw, 'typeof:', typeof raw, 'isArray:', Array.isArray(raw));
   const val = raw == null ? loadConfigFromLocal('monthlyClients') || [] : raw;
-  if(typeof val === 'string') { try { return JSON.parse(val); } catch(e) { return []; } }
+  console.log('📋 getMonthlyClientsConfig - val after fallback:', val, 'typeof:', typeof val, 'isArray:', Array.isArray(val));
+  if(typeof val === 'string') { 
+    console.log('⚠️ val is a STRING! Parsing...', val.substring(0, 100));
+    try { 
+      const parsed = JSON.parse(val);
+      console.log('✅ Parsed to:', parsed, 'length:', parsed?.length);
+      return parsed; 
+    } catch(e) { 
+      console.error('❌ Parse failed:', e);
+      return []; 
+    } 
+  }
+  console.log('✅ Returning val:', val);
   return val;
 }
 async function setMonthlyClientsConfig(list){await setConfigAsync('monthlyClients',list);}
@@ -1532,10 +1551,14 @@ function getFixedCosts(){
 }
 function getMonthlyClientsRevenue(){
   const list=getMonthlyClients();
-  console.log('getMonthlyClientsRevenue list:', list);
-  if(!Array.isArray(list)) return 0;
-  const total = list.reduce((s,c)=>s+Number(c.importoMensile||0),0);
-  console.log('getMonthlyClientsRevenue total:', total);
+  console.log('🔵 getMonthlyClientsRevenue list:', list, 'isArray:', Array.isArray(list), 'length:', list?.length);
+  if(!Array.isArray(list)) { console.log('❌ NOT AN ARRAY!'); return 0; }
+  const total = list.reduce((s,c)=>{
+    const amt = Number(c.importoMensile||0);
+    console.log('  - client', c.nome, 'importoMensile:', amt);
+    return s + amt;
+  },0);
+  console.log('🟢 getMonthlyClientsRevenue FINAL total:', total);
   return total;
 }
 function showMonthlyClientsModal(){
