@@ -1573,7 +1573,7 @@ function addMonthlyClientModal(){
     const list=getMonthlyClientsConfig();
     list.push({id:uid(),nome,importoMensile:amt,isManuale:true});
     await setMonthlyClientsConfig(list);
-    closeModal();showMonthlyClientsModal();
+    closeModal();render();showMonthlyClientsModal();
   },'Aggiungi');
 }
 function editMonthlyClientPrice(id,nome,currentAmt){
