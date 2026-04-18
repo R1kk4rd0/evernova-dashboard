@@ -318,13 +318,11 @@ async function loadAll(){
       }
     });
     ['fixedCosts','monthlyClients','monthlyClientsExcluded','goals'].forEach(key=>{
-      if(DB.configCache[key]===undefined || DB.configCache[key]===null){
-        const fallback=loadConfigFromLocal(key);
-        if(fallback!==null){
-          DB.configCache[key]=fallback;
-          console.log('Restored', key, 'from localStorage', fallback);
-          setConfigAsync(key,fallback).catch(e=>console.warn('Background sync failed for', key, e));
-        }
+      const localValue = loadConfigFromLocal(key);
+      if(localValue !== null){
+        DB.configCache[key] = localValue;
+        console.log('Overriding config', key, 'with localStorage value:', localValue);
+        setConfigAsync(key, localValue).catch(e=>console.warn('Background sync failed for', key, e));
       }
     });
     if(Array.isArray(DB.configCache.goals)){
@@ -447,10 +445,15 @@ function renderOverview(c){
     let html='';
     if(DB.goals.length>0){
       html=DB.goals.map((g,i)=>{
-        const pct=Math.min(100,Math.round(Number(g.current||0)/Math.max(Number(g.target||1),1)*100));
+        const normalizedLabel = String(g.label||'').toLowerCase();
+        const isMonthly = normalizedLabel.includes('fatturato') || normalizedLabel.includes('ricorrente');
+        const monthlyRevenue = getMonthlyClientsRevenue();
+        const currentValue = isMonthly ? monthlyRevenue : Number(g.current||0);
+        console.log('Rendering goal', g.label, 'isMonthly=', isMonthly, 'currentValue=', currentValue, 'monthlyRevenue=', monthlyRevenue, 'g.current=', g.current, 'g.target=', g.target);
+        const pct=Math.min(100,Math.round(currentValue/Math.max(Number(g.target||1),1)*100));
         const col=pct>=80?'#16A34A':pct>=50?'#4F46E5':'#D97706';
         const click=i===0?'onclick="showMonthlyClientsModal()"':'onclick="editGoal('+i+')"';
-        return `<div class="goal-item" ${click}><div class="goal-header"><span class="goal-label">${g.label}</span><span class="goal-nums">${g.current}/${g.target} · ${pct}%</span></div><div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
+        return `<div class="goal-item" ${click}><div class="goal-header"><span class="goal-label">${g.label}</span><span class="goal-nums">${currentValue}/${g.target} · ${pct}%</span></div><div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
       }).join('');
     }else{html='<div style="font-size:13px;color:var(--text3)">Nessun obiettivo.</div>';}
     const fixedCosts=getFixedCosts();
@@ -1474,9 +1477,10 @@ async function setConfigAsync(key,val){
   try {
     const result = await apiPost('setConfigValue',{chiave:key,valore:JSON.stringify(val)});
     console.log('setConfigAsync response:', result);
+    return result;
   } catch(e) {
     console.warn('setConfigAsync backend failed, kept local only', key, e);
-    throw e;
+    return { ok:false, error: String(e.message || e) };
   }
 }
 function getMonthlyClientsConfig(){
@@ -1524,6 +1528,14 @@ function getFixedCosts(){
   }
   const total = list.reduce((s,c)=>s+Number(c.importo||0),0);
   console.log('getFixedCosts - total:', total);
+  return total;
+}
+function getMonthlyClientsRevenue(){
+  const list=getMonthlyClients();
+  console.log('getMonthlyClientsRevenue list:', list);
+  if(!Array.isArray(list)) return 0;
+  const total = list.reduce((s,c)=>s+Number(c.importoMensile||0),0);
+  console.log('getMonthlyClientsRevenue total:', total);
   return total;
 }
 function showMonthlyClientsModal(){
