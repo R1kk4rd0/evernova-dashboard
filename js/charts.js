@@ -2,6 +2,11 @@
 // CHARTS — Revenue bar chart & Cashflow mixed chart
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Renderizza il grafico a barre orizzontali "Revenue per cliente".
+ * Aggiorna anche le pill anno sopra il grafico.
+ * @param {string} year - Anno da filtrare (es. '2025'), stringa vuota = tutti
+ */
 function renderRevChart(year) {
   revYear = year;
   const pillsEl = document.getElementById('revYearPills');
@@ -50,12 +55,22 @@ function renderRevChart(year) {
   });
 }
 
+/**
+ * Converte una stringa data ISO in chiave mese 'YYYY-MM'.
+ * @param {string} dateStr
+ * @returns {string} Es. '2025-04', stringa vuota se data invalida
+ */
 function getMonthKey(dateStr) {
   const d = new Date(dateStr);
   if (isNaN(d)) return '';
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
+/**
+ * Converte una chiave mese 'YYYY-MM' in label leggibile (es. "apr 25").
+ * @param {string} key
+ * @returns {string}
+ */
 function getMonthLabel(key) {
   if (!key) return '';
   const [year, month] = key.split('-');
@@ -63,6 +78,11 @@ function getMonthLabel(key) {
   return date.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
 }
 
+/**
+ * Genera l'array di chiavi mese per la vista "Storico + Previsione":
+ * 5 mesi passati + mese corrente + 11 mesi futuri (17 mesi totali).
+ * @returns {string[]}
+ */
 function buildMixedCashflowMonths() {
   const now = new Date();
   const months = [];
@@ -77,6 +97,12 @@ function buildMixedCashflowMonths() {
   return months;
 }
 
+/**
+ * Genera l'array di chiavi mese per un anno specifico (12 mesi)
+ * o per i prossimi 12 mesi da oggi se year è stringa vuota.
+ * @param {string} year - Anno (es. '2025') o '' per prossimi 12 mesi
+ * @returns {string[]}
+ */
 function buildCashflowMonths(year) {
   const months = [];
   if (year) {
@@ -95,6 +121,12 @@ function buildCashflowMonths(year) {
   return months;
 }
 
+/**
+ * Calcola il ricavo previsto per mese dalle fatture pending/overdue
+ * con data di scadenza che cade nel periodo indicato.
+ * @param {string} year - Anno o '' (vedi buildCashflowMonths)
+ * @returns {Object.<string,number>} Mappa monthKey → importo
+ */
 function getInvoiceForecastByMonth(year) {
   const months = buildCashflowMonths(year);
   const result = Object.fromEntries(months.map(month => [month, 0]));
@@ -107,6 +139,11 @@ function getInvoiceForecastByMonth(year) {
   return result;
 }
 
+/**
+ * Aggrega le spese reali per mese nel periodo indicato.
+ * @param {string} year - Anno o '' (vedi buildCashflowMonths)
+ * @returns {Object.<string,number>} Mappa monthKey → importo
+ */
 function getExpensesByMonth(year) {
   const months = buildCashflowMonths(year);
   const result = Object.fromEntries(months.map(month => [month, 0]));
@@ -117,6 +154,11 @@ function getExpensesByMonth(year) {
   return result;
 }
 
+/**
+ * Renderizza il grafico cashflow (barre ricavi/costi + linea saldo Qonto proiettato).
+ * Aggiorna le pill anno e registra il click-handler per il dettaglio mensile.
+ * @param {'mixed'|''|string} year - 'mixed' = storico+previsione, '' = prossimi 12m, '2025' = anno fisso
+ */
 function renderCashflowChart(year) {
   cashflowYear = year;
   const pillsEl = document.getElementById('cashflowYearPills');
@@ -138,6 +180,11 @@ function renderCashflowChart(year) {
   const chartCtx = canvasEl.getContext('2d');
   const currentMonthKey = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0');
 
+  /**
+   * Crea un pattern canvas a tratteggio diagonale per le barre previsionali.
+   * @param {string} color - Colore del tratteggio
+   * @returns {CanvasPattern}
+   */
   function stripePattern(color) {
     const sz = 8;
     const c = document.createElement('canvas');
@@ -208,6 +255,7 @@ function renderCashflowChart(year) {
     redBg   = '#DC2626';
   }
 
+  // Saldo proiettato: ancorato a DB.saldo.balance al mese corrente, poi propagato avanti/indietro
   const currentIdx = months.findIndex(m => m === currentMonthKey);
   const anchorIdx  = currentIdx >= 0 ? currentIdx : 0;
   const netMonthly = revenueData.map((v, i) => v - costData[i]);
@@ -301,10 +349,16 @@ function renderCashflowChart(year) {
   });
 }
 
+/**
+ * Apre un modal con il dettaglio di ricavi e costi per un mese del cashflow.
+ * Per mesi passati mostra dati reali (fatture pagate + spese effettive).
+ * Per mesi futuri/corrente mostra previsione (fatture pending + retainer + costi fissi).
+ * @param {string} monthKey - Chiave mese 'YYYY-MM'
+ * @param {string} currentMonthKey - Chiave del mese corrente 'YYYY-MM'
+ */
 function openCashflowMonthDetail(monthKey, currentMonthKey) {
-  const label    = getMonthLabel(monthKey);
-  const isPast   = monthKey < currentMonthKey;
-  const isFuture = monthKey > currentMonthKey;
+  const label  = getMonthLabel(monthKey);
+  const isPast = monthKey < currentMonthKey;
 
   const paidInvs = DB.fatture.filter(inv =>
     getStatoEffettivo(inv) === 'paid' && getMonthKey(inv.data || '') === monthKey
@@ -314,7 +368,7 @@ function openCashflowMonthDetail(monthKey, currentMonthKey) {
     if (['paid', 'draft', 'annullata', 'nota'].includes(s)) return false;
     return getMonthKey(inv.scadenza || inv.data || '') === monthKey;
   });
-  const showInvs    = isPast ? paidInvs : pendingInvs;
+  const showInvs     = isPast ? paidInvs : pendingInvs;
   const retainerList = !isPast ? getMonthlyClients() : [];
   const retainerTot  = retainerList.reduce((s, c) => s + Number(c.importoMensile || 0), 0);
 
@@ -331,6 +385,15 @@ function openCashflowMonthDetail(monthKey, currentMonthKey) {
     ? '<span style="font-size:11px;background:var(--surface2);color:var(--text3);padding:2px 8px;border-radius:4px">Reale</span>'
     : '<span style="font-size:11px;background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:4px">Previsione</span>';
 
+  /**
+   * Genera l'HTML di una sezione (Ricavi o Costi) con righe e totale.
+   * @param {string} title
+   * @param {string} color
+   * @param {Array<{label:string, amt:number}>} rows
+   * @param {number} total
+   * @param {string} emptyMsg
+   * @returns {string} HTML
+   */
   function section(title, color, rows, total, emptyMsg) {
     const rowsHtml = rows.length
       ? rows.map(r => `

@@ -2,21 +2,48 @@
 // UI UTILITIES
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Aggiorna il pallino e il testo di connessione nella sidebar.
+ * @param {'live'|'error'|''} t - Tipo di stato
+ * @param {string} tx - Testo da mostrare
+ */
 function setConn(t, tx) {
   document.getElementById('connDot').className = 'conn-dot' + (t === 'live' ? ' live' : t === 'error' ? ' error' : '');
   document.getElementById('connText').textContent = tx;
 }
+
+/**
+ * Mostra l'overlay di caricamento con un messaggio opzionale.
+ * @param {string} [t=''] - Testo da mostrare sotto lo spinner
+ */
 function showLoading(t = '') {
   document.getElementById('loadingText').textContent = t;
   document.getElementById('loadingOverlay').classList.add('show');
 }
+
+/** Nasconde l'overlay di caricamento. */
 function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+
+/**
+ * Mostra un toast temporaneo (3.5 s).
+ * @param {string} msg - Testo del messaggio
+ * @param {'success'|'error'|''} [type=''] - Variante colore
+ */
 function toast(msg, type = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.className = 'toast show' + (type ? ' ' + type : '');
   setTimeout(() => el.className = 'toast', 3500);
 }
+
+/**
+ * Apre il modal generico con titolo, sottotitolo, body HTML e callback di salvataggio.
+ * @param {string} title - Titolo del modal
+ * @param {string} sub - Sottotitolo (può essere stringa vuota)
+ * @param {string} body - HTML del corpo
+ * @param {Function} saveFn - Callback eseguita al click "Salva"
+ * @param {string} [saveLabel='Salva'] - Etichetta del pulsante di conferma
+ */
 function openModal(title, sub, body, saveFn, saveLabel = 'Salva') {
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalSub').textContent   = sub || '';
@@ -26,8 +53,14 @@ function openModal(title, sub, body, saveFn, saveLabel = 'Salva') {
   modalSaveFn = saveFn;
   document.getElementById('modalOverlay').classList.add('open');
 }
+
+/** Chiude il modal e resetta la callback. */
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); modalSaveFn = null; }
+
+/** Esegue la callback di salvataggio registrata al momento di openModal. */
 function execModalSave() { if (modalSaveFn) modalSaveFn(); }
+
+/** Distrugge tutti i chart Chart.js attivi e svuota il registro `charts`. */
 function destroyCharts() { Object.values(charts).forEach(c => { try { c.destroy(); } catch (e) {} }); charts = {}; }
 
 // ─────────────────────────────────────────────────────────────
@@ -38,6 +71,10 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el =>
   el.addEventListener('click', () => navTo(el.dataset.page))
 );
 
+/**
+ * Naviga a una pagina di primo livello, resettando il detailCtx e la selezione.
+ * @param {string} page - Nome pagina ('overview'|'invoices'|'clients'|'projects'|'expenses'|'suppliers'|'sync')
+ */
 function navTo(page) {
   currentPage = page;
   detailCtx   = { type: null, id: null };
@@ -48,9 +85,20 @@ function navTo(page) {
   render();
 }
 
+/**
+ * Naviga a una vista di dettaglio (client o project) senza cambiare pagina nav.
+ * @param {'client'|'project'} type
+ * @param {string} id
+ */
 function showDetail(type, id) { detailCtx = { type, id }; render(); }
-function backToList()         { detailCtx = { type: null, id: null }; render(); }
 
+/** Torna alla lista dalla vista di dettaglio. */
+function backToList() { detailCtx = { type: null, id: null }; render(); }
+
+/**
+ * Punto d'ingresso del rendering: distrugge i chart, decide se mostrare
+ * una vista dettaglio o una pagina, e delega alla funzione render specifica.
+ */
 function render() {
   destroyCharts();
   const c = document.getElementById('mainContent');
@@ -67,9 +115,10 @@ function render() {
   else if (currentPage === 'sync')      renderSync(c);
 }
 
+/** Aggiorna il breadcrumb e il sottotitolo nella topbar in base a currentPage e detailCtx. */
 function setBreadcrumb() {
-  const titles = { overview:'Dashboard', invoices:'Fatture', clients:'Clienti', projects:'Progetti', expenses:'Spese', suppliers:'Fornitori', sync:'Sync Qonto' };
-  const subs   = { overview:'Panoramica del tuo business', invoices:'Gestione fatturazione', clients:'Anagrafica clienti', projects:'Progetti e marginalita\'', expenses:'Costi e spese', suppliers:'Rubrica fornitori', sync:'Sincronizzazione Qonto' };
+  const titles = { overview: 'Dashboard', invoices: 'Fatture', clients: 'Clienti', projects: 'Progetti', expenses: 'Spese', suppliers: 'Fornitori', sync: 'Sync Qonto' };
+  const subs   = { overview: 'Panoramica del tuo business', invoices: 'Gestione fatturazione', clients: 'Anagrafica clienti', projects: 'Progetti e marginalita\'', expenses: 'Costi e spese', suppliers: 'Rubrica fornitori', sync: 'Sincronizzazione Qonto' };
   const el  = document.getElementById('breadcrumbEl');
   const sub = document.getElementById('topbarSub');
   if (detailCtx.type === 'client') {
@@ -86,6 +135,7 @@ function setBreadcrumb() {
   }
 }
 
+/** Popola i pulsanti d'azione nella topbar in base alla pagina corrente. */
 function setTopActions() {
   const el = document.getElementById('topbarActions');
   if (detailCtx.type) { el.innerHTML = ''; return; }

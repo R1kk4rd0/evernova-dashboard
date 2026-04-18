@@ -3,6 +3,7 @@
 //           CONFIG: obiettivi, clienti ricorrenti, costi fissi
 // ─────────────────────────────────────────────────────────────
 
+/** Apre il modal per creare un nuovo cliente. */
 function openNewClientModal() {
   openModal('Nuovo cliente', '', `
     <div class="modal-row">
@@ -39,6 +40,10 @@ function openNewClientModal() {
   );
 }
 
+/**
+ * Apre il modal per modificare un cliente esistente.
+ * @param {string} id - ID del cliente
+ */
 function openEditClientModal(id) {
   const cl = clientById(id);
   if (!cl) return;
@@ -64,6 +69,7 @@ function openEditClientModal(id) {
   );
 }
 
+/** Apre il modal per creare una nuova fattura (con selezione cliente). */
 function openNewInvoiceModal() {
   const clientOpts = DB.clienti.map(c => `<option value="${c.id}">${getNome(c)}</option>`).join('');
   openModal('Nuova fattura', '', `
@@ -101,6 +107,10 @@ function openNewInvoiceModal() {
   );
 }
 
+/**
+ * Apre il modal per creare una fattura precompilata per un cliente specifico.
+ * @param {string} clientId - ID del cliente
+ */
 function openNewInvoiceForClient(clientId) {
   openModal('Nuova fattura', clientName(clientId), `
     <div class="modal-field"><label>Descrizione</label><input id="mf_idesc"></div>
@@ -130,6 +140,7 @@ function openNewInvoiceForClient(clientId) {
   );
 }
 
+/** Apre il modal per creare un nuovo progetto (con selezione cliente). */
 function openNewProjectModal() {
   const clientOpts = DB.clienti.map(c => `<option value="${c.id}">${getNome(c)}</option>`).join('');
   openModal('Nuovo progetto', '', `
@@ -182,6 +193,10 @@ function openNewProjectModal() {
   );
 }
 
+/**
+ * Apre il modal per modificare budget, stato, avanzamento e data fine di un progetto.
+ * @param {string} id - ID del progetto
+ */
 function openEditProjectModal(id) {
   const p = DB.progetti.find(x => String(x.id) === String(id));
   if (!p) return;
@@ -218,6 +233,12 @@ function openEditProjectModal(id) {
   );
 }
 
+/**
+ * Apre il modal per aggiungere un costo a un progetto.
+ * Se si seleziona un fornitore, precompila descrizione e categoria.
+ * Se il fornitore non è già collegato al progetto, crea automaticamente il link FornProg.
+ * @param {string} projId - ID del progetto
+ */
 function openAddCostModal(projId) {
   const fornOpts = DB.fornitori.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(f =>
     `<option value="${f.id}">${f.nome}</option>`
@@ -241,15 +262,15 @@ function openAddCostModal(projId) {
     </div>
     <div class="modal-field"><label>Data</label><input id="mf_cdate" type="date" value="${new Date().toISOString().split('T')[0]}"></div>`,
     async () => {
-      const desc  = document.getElementById('mf_cdesc').value.trim();
-      const amt   = parseFloat(document.getElementById('mf_camt').value);
+      const desc   = document.getElementById('mf_cdesc').value.trim();
+      const amt    = parseFloat(document.getElementById('mf_camt').value);
       if (!desc || !amt) return;
       const fornId = document.getElementById('mf_cforn').value;
       await save('saveCost', {
         id: uid(), progettoId: projId, descrizione: desc,
-        categoria:  document.getElementById('mf_ccat').value,
-        importo:    amt,
-        data:       document.getElementById('mf_cdate').value,
+        categoria:   document.getElementById('mf_ccat').value,
+        importo:     amt,
+        data:        document.getElementById('mf_cdate').value,
         fornitoreId: fornId || '',
       });
       if (fornId) {
@@ -264,6 +285,8 @@ function openAddCostModal(projId) {
 }
 
 // ── CLIENTI RICORRENTI ────────────────────────────────────────
+
+/** Apre il modal di gestione clienti ricorrenti (retainer). */
 function showMonthlyClientsModal() {
   const clients = getMonthlyClients();
   let body = '<div style="max-height:380px;overflow-y:auto">';
@@ -286,6 +309,7 @@ function showMonthlyClientsModal() {
   openModal('Clienti ricorrenti', 'Inserimento manuale', body, () => closeModal(), 'Chiudi');
 }
 
+/** Apre il modal per aggiungere un cliente ricorrente (selezione da lista o nome libero). */
 function addMonthlyClientModal() {
   closeModal();
   const clientOptions = DB.clienti.map(c => `<option value="${c.id}">${getNome(c)}</option>`).join('');
@@ -304,6 +328,12 @@ function addMonthlyClientModal() {
   }, 'Aggiungi');
 }
 
+/**
+ * Apre il modal per modificare l'importo mensile di un cliente ricorrente.
+ * @param {string} id - ID del cliente ricorrente
+ * @param {string} nome - Nome del cliente (usato come label)
+ * @param {number} currentAmt - Importo mensile corrente
+ */
 function editMonthlyClientPrice(id, nome, currentAmt) {
   closeModal();
   openModal('Modifica prezzo', `Cliente: ${nome}`, `
@@ -321,12 +351,18 @@ function editMonthlyClientPrice(id, nome, currentAmt) {
   }, 'Salva');
 }
 
+/**
+ * Rimuove un cliente dalla lista dei ricorrenti e aggiorna la config.
+ * @param {string} id - ID del cliente ricorrente da rimuovere
+ */
 function removeMonthlyClient(id) {
   const list = getMonthlyClientsConfig().filter(c => String(c.id) !== String(id));
   setMonthlyClientsConfig(list).then(() => { render(); showMonthlyClientsModal(); }).catch(e => { console.error(e); showMonthlyClientsModal(); });
 }
 
 // ── COSTI FISSI ───────────────────────────────────────────────
+
+/** Apre il modal di gestione costi fissi mensili (visualizza lista + totale + azioni). */
 function editFixedCosts() {
   const list  = getFixedCostsConfig();
   const total = getFixedCosts();
@@ -358,6 +394,10 @@ function editFixedCosts() {
   openModal('Costi fissi mensili', 'Transazioni + manuali', body, () => closeModal(), 'Chiudi');
 }
 
+/**
+ * Apre il modal per aggiungere un costo fisso prelevandolo dallo storico spese Qonto.
+ * Supporta ricerca testuale per filtrare le opzioni nel select.
+ */
 function addExpenseFixedCostModal() {
   closeModal();
   const allExpenses = DB.spese.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
@@ -380,6 +420,7 @@ function addExpenseFixedCostModal() {
   }, 'Aggiungi');
 }
 
+/** Apre il modal per aggiungere un costo fisso inserito manualmente (descrizione + importo). */
 function addManualFixedCostModal() {
   closeModal();
   openModal('Costo fisso manuale', '', `
@@ -396,12 +437,23 @@ function addManualFixedCostModal() {
   }, 'Aggiungi');
 }
 
+/**
+ * Rimuove un costo fisso dalla lista e aggiorna la config.
+ * @param {string} id - ID del costo fisso da rimuovere
+ */
 function removeFixedCost(id) {
   const list = getFixedCostsConfig().filter(c => String(c.id) !== String(id));
   setFixedCostsConfig(list).then(() => { render(); editFixedCosts(); }).catch(e => { console.error(e); editFixedCosts(); });
 }
 
 // ── OBIETTIVI ─────────────────────────────────────────────────
+
+/**
+ * Apre il modal per modificare target e valore corrente di un obiettivo.
+ * Per obiettivi di tipo "retainer" il valore corrente è calcolato automaticamente
+ * dal numero di clienti ricorrenti e non è editabile.
+ * @param {number} i - Indice dell'obiettivo in DB.goals
+ */
 function editGoal(i) {
   const g = DB.goals[i];
   const isRetainer = String(g.label || '').toLowerCase().includes('retainer');

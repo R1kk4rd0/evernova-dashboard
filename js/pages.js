@@ -1,10 +1,16 @@
 // ─────────────────────────────────────────────────────────────
 // PAGES — renderOverview, renderInvoices, renderClients,
 //          renderProjects, renderExpenses, renderSuppliers,
-//          renderSync + all page-specific helpers & modals
+//          renderSync + tutti i helper e modal di pagina
 // ─────────────────────────────────────────────────────────────
 
 // ── OVERVIEW ─────────────────────────────────────────────────
+
+/**
+ * Renderizza la dashboard principale con KPI, grafico revenue, cashflow,
+ * obiettivi, ultime fatture e clienti recenti.
+ * @param {HTMLElement} c - Contenitore principale (#mainContent)
+ */
 function renderOverview(c) {
   const fatturato = DB.fatture.filter(i => i.stato !== 'draft').reduce((s, i) => s + Number(i.importo || 0), 0);
   const incassato = DB.fatture.filter(i => getStatoEffettivo(i) === 'paid').reduce((s, i) => s + Number(i.importo || 0), 0);
@@ -86,12 +92,17 @@ function renderOverview(c) {
 }
 
 // ── INVOICES ─────────────────────────────────────────────────
+
+/**
+ * Renderizza la pagina fatture con KPI, barra di ricerca, filtri per anno/stato e tabella ordinabile.
+ * @param {HTMLElement} c
+ */
 function renderInvoices(c) {
   const all = DB.fatture;
   const allAnni = [...new Set(all.map(i => (i.data || '').substring(0, 4)).filter(Boolean))].sort().reverse();
 
   function filteredInv() {
-    const q = (filters.invoices.q || '').toLowerCase();
+    const q     = (filters.invoices.q || '').toLowerCase();
     const annoF = filters.invoices.anno || '';
     let r = invFilter === 'all' ? [...all] : all.filter(i => getStatoEffettivo(i) === invFilter);
     if (q) r = r.filter(i => (i.clienteNome || '').toLowerCase().includes(q) || (i.descrizione || '').toLowerCase().includes(q));
@@ -184,6 +195,10 @@ function renderInvoices(c) {
   if (filters.invoices.q) document.getElementById('invClear').classList.add('vis');
 }
 
+/**
+ * Cambia la colonna di ordinamento della tabella fatture (toggle asc/desc).
+ * @param {string} col - Nome colonna ('data'|'importo'|'stato'|'clienteNome'|'descrizione')
+ */
 function sortInv(col) {
   if (invSort.col === col) { invSort.dir = invSort.dir === 'asc' ? 'desc' : 'asc'; }
   else { invSort.col = col; invSort.dir = col === 'data' || col === 'importo' ? 'desc' : 'asc'; }
@@ -191,6 +206,10 @@ function sortInv(col) {
   if (c) renderInvoices(c);
 }
 
+/**
+ * Imposta il filtro per stato fattura e re-renderizza la pagina.
+ * @param {'all'|'paid'|'pending'|'draft'|'overdue'} f
+ */
 function setInvFilter(f) {
   invFilter = f;
   const c = document.getElementById('mainContent');
@@ -198,15 +217,20 @@ function setInvFilter(f) {
 }
 
 // ── INVOICE DETAIL MODAL ─────────────────────────────────────
+
+/**
+ * Apre il modal di dettaglio di una fattura.
+ * Per fatture manuali mostra i campi editabili (importo, stato).
+ * Per fatture Qonto è sola lettura con opzione di rimozione dalla dashboard.
+ * @param {string} id - ID fattura
+ */
 function openInvDetail(id) {
   const inv = DB.fatture.find(x => String(x.id) === String(id));
   if (!inv) return;
-  const stato = getStatoEffettivo(inv);
+  const stato   = getStatoEffettivo(inv);
   const isQonto = inv.fonte === 'qonto';
-  const bmap = { paid: 'b-paid', pending: 'b-pending', draft: 'b-draft', overdue: 'b-overdue' };
-  const lmap = { paid: 'Pagata', pending: 'In attesa', draft: 'Bozza', overdue: 'Scaduta', annullata: 'Annullata' };
   document.getElementById('modalTitle').textContent = inv.descrizione || 'Fattura';
-  document.getElementById('modalSub').textContent = (inv.clienteNome || clientName(inv.clienteId)) + ' · ' + fmtDate(inv.data);
+  document.getElementById('modalSub').textContent   = (inv.clienteNome || clientName(inv.clienteId)) + ' · ' + fmtDate(inv.data);
   document.getElementById('modalBody').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div style="background:var(--surface2);border-radius:8px;padding:14px">
@@ -267,6 +291,11 @@ function openInvDetail(id) {
 }
 
 // ── CLIENTS ──────────────────────────────────────────────────
+
+/**
+ * Renderizza la griglia clienti con ricerca testuale e modalità selezione multipla per eliminazione.
+ * @param {HTMLElement} c
+ */
 function renderClients(c) {
   if (!DB.clienti.length) {
     c.innerHTML = '<div style="text-align:center;padding:60px 0"><div style="font-size:15px;font-weight:500;margin-bottom:8px">Nessun cliente</div><button class="btn-primary" onclick="doSync()">↺ Sync Qonto</button></div>';
@@ -281,13 +310,13 @@ function renderClients(c) {
       getNome(cl).toLowerCase().includes(q) ||
       String(cl.email || '').toLowerCase().includes(q) ||
       String(cl.citta || '').toLowerCase().includes(q) ||
-      String(cl.piva || '').toLowerCase().includes(q)
+      String(cl.piva  || '').toLowerCase().includes(q)
     );
   }
 
   function renderGrid() {
     const lista = filtered();
-    const cnt = document.getElementById('clCount');
+    const cnt   = document.getElementById('clCount');
     if (cnt) cnt.textContent = lista.length + ' / ' + DB.clienti.length + ' clienti';
     const grid = document.getElementById('clGrid');
     if (!grid) return;
@@ -338,6 +367,7 @@ function renderClients(c) {
   if (filters.clients.q) document.getElementById('clClear').classList.add('vis');
 }
 
+/** Attiva/disattiva la modalità selezione multipla nella griglia clienti. */
 function toggleSelectMode() {
   selectMode = !selectMode; selectedClients = new Set();
   document.querySelectorAll('[id^="chk_"]').forEach(el => { el.style.display = selectMode ? 'flex' : 'none'; el.innerHTML = ''; });
@@ -348,6 +378,11 @@ function toggleSelectMode() {
     : '<button class="btn-ghost" style="font-size:12px" onclick="toggleSelectMode()">Seleziona per eliminare</button>';
 }
 
+/**
+ * Gestisce il click su una card cliente: navigazione al dettaglio o toggle selezione.
+ * @param {MouseEvent} e
+ * @param {string} id - ID del cliente
+ */
 function clientCardClick(e, id) {
   if (!selectMode) { showDetail('client', id); return; }
   e.stopPropagation();
@@ -366,6 +401,7 @@ function clientCardClick(e, id) {
   if (cnt) cnt.textContent = selectedClients.size;
 }
 
+/** Apre il modal di conferma ed elimina tutti i clienti selezionati. */
 function deleteSelected() {
   if (!selectedClients.size) return;
   const ids = [...selectedClients];
@@ -381,6 +417,13 @@ function deleteSelected() {
 }
 
 // ── CLIENT DETAIL ────────────────────────────────────────────
+
+/**
+ * Renderizza la scheda di dettaglio cliente con KPI, dati anagrafici,
+ * note, progetti associati e storico fatture.
+ * @param {string} id - ID cliente
+ * @param {HTMLElement} c
+ */
 function renderClientDetail(id, c) {
   setBreadcrumb(); setTopActions();
   const cl = clientById(id);
@@ -440,6 +483,10 @@ function renderClientDetail(id, c) {
   </div>`;
 }
 
+/**
+ * Apre il modal di conferma per eliminare un cliente.
+ * @param {string} id - ID cliente
+ */
 function confirmDeleteClient(id) {
   const cl = clientById(id);
   if (!cl) return;
@@ -448,12 +495,23 @@ function confirmDeleteClient(id) {
     async () => { await del('deleteClient', id); closeModal(); backToList(); }, 'Elimina');
 }
 
+/**
+ * Salva le note di un cliente al blur del textarea.
+ * @param {string} id - ID cliente
+ * @param {string} val - Contenuto del textarea
+ * @returns {Promise<void>}
+ */
 async function saveClientNotes(id, val) {
   const cl = clientById(id);
   if (cl) { cl.note = val; await save('saveClient', cl); }
 }
 
 // ── PROJECTS ─────────────────────────────────────────────────
+
+/**
+ * Renderizza la pagina progetti con KPI, ricerca, filtro stato e tabella ordinabile.
+ * @param {HTMLElement} c
+ */
 function renderProjects(c) {
   const projNum = p => { const m = String(p.nome || '').match(/^(\d+)/); return m ? m[1] : ''; };
 
@@ -487,15 +545,15 @@ function renderProjects(c) {
 
   function renderTable() {
     const lista = filtered();
-    const cnt = document.getElementById('projCount');
+    const cnt   = document.getElementById('projCount');
     if (cnt) cnt.textContent = lista.length + ' / ' + DB.progetti.length + ' progetti';
     const tbody = document.getElementById('projTbody');
     if (!tbody) return;
     tbody.innerHTML = lista.length ? lista.map(p => {
-      const costs  = projCostTotal(p.id), margin = projMargin(p);
-      const mPct   = Number(p.budget || 0) > 0 ? Math.round(margin / Number(p.budget) * 100) : 0;
-      const mc     = mPct >= 60 ? 'var(--green)' : mPct >= 30 ? 'var(--amber)' : 'var(--red)';
-      const num    = projNum(p);
+      const costs      = projCostTotal(p.id), margin = projMargin(p);
+      const mPct       = Number(p.budget || 0) > 0 ? Math.round(margin / Number(p.budget) * 100) : 0;
+      const mc         = mPct >= 60 ? 'var(--green)' : mPct >= 30 ? 'var(--amber)' : 'var(--red)';
+      const num        = projNum(p);
       const nomePulito = num ? p.nome.replace(/^\d+\s*-\s*/, '') : p.nome;
       return '<tr onclick="showDetail(\'project\',\'' + p.id + '\')" style="cursor:pointer">'
         + '<td style="color:var(--text3);font-size:12px;font-weight:600;width:40px">' + (num || '—') + '</td>'
@@ -525,7 +583,7 @@ function renderProjects(c) {
       + '</tr>';
   }
 
-  const active = DB.progetti.filter(p => p.stato === 'active');
+  const active       = DB.progetti.filter(p => p.stato === 'active');
   const totalBudget  = DB.progetti.reduce((s, p) => s + Number(p.budget || 0), 0);
   const totalMargine = DB.progetti.reduce((s, p) => s + projMargin(p), 0);
 
@@ -567,6 +625,10 @@ function renderProjects(c) {
   if (filters.projects.q) document.getElementById('projClear').classList.add('vis');
 }
 
+/**
+ * Cambia la colonna di ordinamento della tabella progetti.
+ * @param {string} col - Nome colonna
+ */
 function sortProj(col) {
   if (projSort.col === col) { projSort.dir = projSort.dir === 'asc' ? 'desc' : 'asc'; }
   else { projSort.col = col; projSort.dir = col === 'dataInizio' || col === 'budget' || col === 'margine' ? 'desc' : 'asc'; }
@@ -575,13 +637,20 @@ function sortProj(col) {
 }
 
 // ── PROJECT DETAIL ───────────────────────────────────────────
+
+/**
+ * Renderizza la scheda di dettaglio progetto con KPI, lista costi,
+ * conto economico, note e fornitori collegati.
+ * @param {string} id - ID progetto
+ * @param {HTMLElement} c
+ */
 function renderProjectDetail(id, c) {
   setBreadcrumb(); setTopActions();
   const p = DB.progetti.find(x => String(x.id) === String(id));
   if (!p) { c.innerHTML = '<div>Non trovato.</div>'; return; }
   const costs = projCosts(id), costsTotal = projCostTotal(id), margin = projMargin(p);
-  const mPct = Number(p.budget || 0) > 0 ? Math.round(margin / Number(p.budget) * 100) : 0;
-  const mc   = mPct >= 60 ? 'var(--green)' : mPct >= 30 ? 'var(--amber)' : 'var(--red)';
+  const mPct  = Number(p.budget || 0) > 0 ? Math.round(margin / Number(p.budget) * 100) : 0;
+  const mc    = mPct >= 60 ? 'var(--green)' : mPct >= 30 ? 'var(--amber)' : 'var(--red)';
   c.innerHTML = `
   <div class="detail-back" onclick="backToList()">← Tutti i progetti</div>
   <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:12px">
@@ -644,6 +713,13 @@ function renderProjectDetail(id, c) {
   </div>`;
 }
 
+/**
+ * Elimina un costo da un progetto. Se il fornitore associato non ha altri costi
+ * su quel progetto, rimuove anche il link FornProg.
+ * @param {string} costId
+ * @param {string} projId
+ * @returns {Promise<void>}
+ */
 async function delCost(costId, projId) {
   const cost   = DB.costi.find(x => String(x.id) === String(costId));
   const fornId = cost ? String(cost.fornitoreId || '') : '';
@@ -667,12 +743,24 @@ async function delCost(costId, projId) {
   showDetail('project', projId);
 }
 
+/**
+ * Salva le note di un progetto al blur del textarea.
+ * @param {string} id - ID progetto
+ * @param {string} val
+ * @returns {Promise<void>}
+ */
 async function saveProjNotes(id, val) {
   const p = DB.progetti.find(x => String(x.id) === String(id));
   if (p) { p.note = val; await save('saveProject', p); }
 }
 
 // ── EXPENSES ─────────────────────────────────────────────────
+
+/**
+ * Renderizza la pagina spese con KPI, lista filtrata, form aggiunta rapida
+ * e grafico a barre per categoria.
+ * @param {HTMLElement} c
+ */
 function renderExpenses(c) {
   const allCat  = [...new Set(DB.spese.map(e => e.categoria).filter(Boolean))].sort();
   const allAnni = [...new Set(DB.spese.map(e => (e.data || '').substring(0, 4)).filter(Boolean))].sort().reverse();
@@ -691,10 +779,10 @@ function renderExpenses(c) {
   function renderList() {
     const sf    = filtered();
     const total = sf.reduce((s, e) => s + Number(e.importo || 0), 0);
-    const cnt = document.getElementById('expCount');   if (cnt) cnt.textContent = sf.length + ' / ' + DB.spese.length;
-    const tot = document.getElementById('expTotal');   if (tot) { tot.textContent = fmtEur(total); tot.style.display = total > 0 ? '' : 'none'; }
-    const clr = document.getElementById('expClear');   if (clr) clr.classList.toggle('vis', (filters.expenses.q || '').length > 0);
-    const list = document.getElementById('expList');   if (!list) return;
+    const cnt = document.getElementById('expCount'); if (cnt) cnt.textContent = sf.length + ' / ' + DB.spese.length;
+    const tot = document.getElementById('expTotal'); if (tot) { tot.textContent = fmtEur(total); tot.style.display = total > 0 ? '' : 'none'; }
+    const clr = document.getElementById('expClear'); if (clr) clr.classList.toggle('vis', (filters.expenses.q || '').length > 0);
+    const list = document.getElementById('expList'); if (!list) return;
     list.innerHTML = sf.map(e => {
       const forn = e.fornitoreId ? DB.fornitori.find(f => String(f.id) === String(e.fornitoreId)) : null;
       const fornTag = forn
@@ -778,6 +866,10 @@ function renderExpenses(c) {
   }
 }
 
+/**
+ * Apre il modal per collegare (o cambiare) il fornitore di una spesa.
+ * @param {string} expId - ID spesa
+ */
 function openLinkFornModal(expId) {
   const e = DB.spese.find(x => String(x.id) === String(expId));
   if (!e) return;
@@ -794,6 +886,11 @@ function openLinkFornModal(expId) {
   );
 }
 
+/**
+ * Apre il modal per collegare un fornitore a un progetto (crea record FornProg).
+ * Esclude i fornitori già collegati al progetto dalla lista.
+ * @param {string} projId - ID progetto
+ */
 function openLinkFornProgModal(projId) {
   const p = DB.progetti.find(x => String(x.id) === String(projId));
   if (!p) return;
@@ -815,8 +912,15 @@ function openLinkFornProgModal(projId) {
   );
 }
 
+/**
+ * Elimina un link FornProg e torna al dettaglio progetto.
+ * @param {string} fpId - ID FornProg
+ * @param {string} projId - ID progetto (per il redirect)
+ * @returns {Promise<void>}
+ */
 async function delFornProg(fpId, projId) { await del('deleteFornProg', fpId); showDetail('project', projId); }
 
+/** Aggiunge una spesa manuale con i valori del form in-page. @returns {Promise<void>} */
 async function addExpense() {
   const d   = document.getElementById('eDesc')?.value.trim();
   const a   = parseFloat(document.getElementById('eAmt')?.value);
@@ -826,12 +930,25 @@ async function addExpense() {
   render();
 }
 
+/** @param {string} id @returns {Promise<void>} */
 async function delExp(id) { await del('deleteExpense', id); render(); }
+
+/**
+ * Chiude il modal e poi elimina la fattura (usato dalle fatture Qonto in sola lettura).
+ * @param {string} id - ID fattura
+ * @returns {Promise<void>}
+ */
 async function delInvAndClose(id) { closeModal(); await del('deleteInvoice', id); render(); }
 
 // ── SUPPLIERS ────────────────────────────────────────────────
+
+/** Categorie disponibili per i fornitori. */
 const FORN_CATS = ['Cameraman', 'Fotografo', 'Drone', 'Post-produzione', 'Audio', 'Regia', 'Attore/Modello', 'Noleggio attrezzatura', 'Trasporti', 'Location', 'Grafica', 'Altro'];
 
+/**
+ * Renderizza la griglia fornitori con ricerca e filtro categoria.
+ * @param {HTMLElement} c
+ */
 function renderSuppliers(c) {
   if (!filters.suppliers) filters.suppliers = { q: '', cat: '' };
 
@@ -847,7 +964,7 @@ function renderSuppliers(c) {
 
   function renderGrid() {
     const lista = filtered();
-    const cnt  = document.getElementById('fornCount');
+    const cnt   = document.getElementById('fornCount');
     if (cnt) cnt.textContent = lista.length + ' / ' + DB.fornitori.length + ' fornitori';
     const grid = document.getElementById('fornGrid');
     if (!grid) return;
@@ -902,11 +1019,15 @@ function renderSuppliers(c) {
   });
 }
 
+/**
+ * Apre il modal dettaglio fornitore con spese, progetti collegati e azioni modifica/elimina.
+ * @param {string} id - ID fornitore
+ */
 function showFornDetail(id) {
   const f = DB.fornitori.find(x => String(x.id) === String(id));
   if (!f) return;
-  const spese  = fornSpese(id);
-  const totale = spese.reduce((s, e) => s + Number(e.importo || 0), 0);
+  const spese    = fornSpese(id);
+  const totale   = spese.reduce((s, e) => s + Number(e.importo || 0), 0);
   const [bg, fg] = avatarColor(f.nome || '');
   document.getElementById('modalTitle').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px">
@@ -969,6 +1090,7 @@ function showFornDetail(id) {
   document.getElementById('modalOverlay').classList.add('open');
 }
 
+/** Apre il modal per creare un nuovo fornitore. */
 function openNewFornModal() {
   openModal('Nuovo fornitore', '', `
     <div class="modal-row">
@@ -996,6 +1118,10 @@ function openNewFornModal() {
     });
 }
 
+/**
+ * Apre il modal per modificare un fornitore esistente.
+ * @param {string} id - ID fornitore
+ */
 function openEditFornModal(id) {
   const f = DB.fornitori.find(x => String(x.id) === String(id));
   if (!f) return;
@@ -1011,22 +1137,32 @@ function openEditFornModal(id) {
     <div class="modal-field"><label>Tariffa giornaliera €</label><input id="mf_ftariffa" type="number" value="${f.tariffa || 0}"></div>
     <div class="modal-field"><label>Note</label><textarea id="mf_fnote">${f.note || ''}</textarea></div>`,
     async () => {
-      f.nome     = document.getElementById('mf_fname').value.trim() || f.nome;
+      f.nome      = document.getElementById('mf_fname').value.trim() || f.nome;
       f.categoria = document.getElementById('mf_fcat').value;
-      f.email    = document.getElementById('mf_femail').value;
-      f.tel      = document.getElementById('mf_ftel').value;
-      f.tariffa  = parseFloat(document.getElementById('mf_ftariffa').value) || 0;
-      f.note     = document.getElementById('mf_fnote').value;
+      f.email     = document.getElementById('mf_femail').value;
+      f.tel       = document.getElementById('mf_ftel').value;
+      f.tariffa   = parseFloat(document.getElementById('mf_ftariffa').value) || 0;
+      f.note      = document.getElementById('mf_fnote').value;
       await save('saveForn', f); closeModal(); render();
     });
 }
 
+/**
+ * Elimina un fornitore dopo conferma nativa.
+ * @param {string} id - ID fornitore
+ * @returns {Promise<void>}
+ */
 async function deleteForn(id) {
   if (!confirm('Eliminare questo fornitore?')) return;
   await del('deleteForn', id); render();
 }
 
 // ── SYNC ─────────────────────────────────────────────────────
+
+/**
+ * Renderizza la pagina Sync Qonto con statistiche e pulsante sync manuale.
+ * @param {HTMLElement} c
+ */
 function renderSync(c) {
   c.innerHTML = `<div class="card" style="max-width:520px">
     <div class="card-header"><div><div class="card-title">Sincronizzazione Qonto</div><div class="card-sub">Sync automatico ogni notte alle 3:00</div></div></div>

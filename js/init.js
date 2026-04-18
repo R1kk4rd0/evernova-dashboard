@@ -10,6 +10,11 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
 });
 
+/**
+ * Punto d'ingresso dell'app: carica i dati e avvia il render.
+ * In caso di errore mostra un pannello con il pulsante "Riprova".
+ * @returns {Promise<void>}
+ */
 async function init() {
   setConn('', 'Connessione...');
   const ok = await loadAll();

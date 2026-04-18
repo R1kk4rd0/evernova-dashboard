@@ -2,6 +2,12 @@
 // API & DATA LOADING
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * GET verso il backend GAS.
+ * @param {string} action - Nome dell'azione (es. 'all', 'sync')
+ * @param {Object} [params={}] - Parametri query aggiuntivi
+ * @returns {Promise<Object>} Risposta JSON
+ */
 async function apiGet(action, params = {}) {
   const qs  = new URLSearchParams({ action, ...params }).toString();
   const res = await fetch(`${API}?${qs}`);
@@ -9,12 +15,24 @@ async function apiGet(action, params = {}) {
   return res.json();
 }
 
+/**
+ * POST verso il backend GAS.
+ * @param {string} action - Nome dell'azione (es. 'saveClient')
+ * @param {Object} data - Payload JSON
+ * @returns {Promise<Object>} Risposta JSON
+ */
 async function apiPost(action, data) {
   const res = await fetch(`${API}?action=${action}`, { method: 'POST', body: JSON.stringify(data) });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
 
+/**
+ * Normalizza il nome di un cliente Qonto, usando `tipo` come fallback
+ * quando `nome` è un UUID o il placeholder "Cliente Qonto".
+ * @param {Object} cl - Oggetto cliente grezzo
+ * @returns {Object} Cliente con nome normalizzato (mutazione in-place + return)
+ */
 function normalizeClient(cl) {
   const raw  = String(cl.nome || '').trim();
   const tipo = String(cl.tipo || '').trim();
@@ -25,18 +43,23 @@ function normalizeClient(cl) {
   return cl;
 }
 
+/**
+ * Carica tutti i dati dal backend e popola DB.
+ * Priorità localStorage su Sheet per evitare race condition al salvataggio.
+ * @returns {Promise<boolean>} true se successo, false se errore di rete
+ */
 async function loadAll() {
   try {
     const data = await apiGet('all');
-    DB.clienti     = (data.clienti || []).map(normalizeClient);
-    DB.fatture     = (data.fatture || []).sort((a, b) => (b.data || '').localeCompare(a.data || ''));
-    DB.progetti    = data.progetti    || [];
-    DB.costi       = data.costi       || [];
-    DB.spese       = data.spese       || [];
-    DB.fornitori   = data.fornitori   || [];
+    DB.clienti      = (data.clienti || []).map(normalizeClient);
+    DB.fatture      = (data.fatture || []).sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+    DB.progetti     = data.progetti    || [];
+    DB.costi        = data.costi       || [];
+    DB.spese        = data.spese       || [];
+    DB.fornitori    = data.fornitori   || [];
     DB.fornProgetti = data.fornProgetti || [];
-    DB.goals       = data.goals       || [];
-    DB.saldo       = data.saldo       || { balance: 0 };
+    DB.goals        = data.goals       || [];
+    DB.saldo        = data.saldo       || { balance: 0 };
 
     DB.configCache = {};
     (data.config || []).forEach(c => {
@@ -44,7 +67,6 @@ async function loadAll() {
       catch { DB.configCache[c.chiave] = c.valore; }
     });
 
-    // localStorage override (priorita' su Sheet per evitare race condition al salvataggio)
     ['fixedCosts', 'monthlyClients', 'monthlyClientsExcluded', 'goals'].forEach(key => {
       const local = loadConfigFromLocal(key);
       if (local !== null) DB.configCache[key] = local;
@@ -61,6 +83,13 @@ async function loadAll() {
   }
 }
 
+/**
+ * Salva un record sul backend, ricarica i dati e mostra un toast.
+ * @param {string} action - Azione GAS (es. 'saveClient', 'saveInvoice')
+ * @param {Object} data - Payload da inviare
+ * @returns {Promise<Object>} Risposta backend
+ * @throws {Error} Se il backend restituisce un errore
+ */
 async function save(action, data) {
   showLoading('Salvataggio...');
   try {
@@ -76,6 +105,12 @@ async function save(action, data) {
   } finally { hideLoading(); }
 }
 
+/**
+ * Elimina un record per ID, ricarica i dati e mostra un toast.
+ * @param {string} action - Azione GAS (es. 'deleteClient')
+ * @param {string} id - ID del record da eliminare
+ * @returns {Promise<void>}
+ */
 async function del(action, id) {
   showLoading('Eliminazione...');
   try {
@@ -88,6 +123,10 @@ async function del(action, id) {
   } finally { hideLoading(); }
 }
 
+/**
+ * Avvia un sync manuale con Qonto, ricarica i dati e aggiorna la view.
+ * @returns {Promise<void>}
+ */
 async function doSync() {
   showLoading('Sincronizzazione Qonto...');
   try {
