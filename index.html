@@ -320,10 +320,9 @@ async function loadAll(){
     ['fixedCosts','monthlyClients','monthlyClientsExcluded','goals'].forEach(key=>{
       const localValue = loadConfigFromLocal(key);
       if(localValue !== null){
-        console.log('⚠️ loadAll sync:', key, '- local value:', localValue, 'cache was:', DB.configCache[key]);
         DB.configCache[key] = localValue;
-        console.log('✓ Updated cache to local value:', DB.configCache[key]);
-        setConfigAsync(key, localValue).catch(e=>console.warn('Background sync failed for', key, e));
+        // Don't re-sync to backend here - it might overwrite recent changes
+        // Backend will get updated when user saves anyway
       }
     });
     if(Array.isArray(DB.configCache.goals)){
