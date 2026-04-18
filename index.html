@@ -312,10 +312,8 @@ async function loadAll(){
       try{
         const parsed=JSON.parse(c.valore);
         DB.configCache[c.chiave]=parsed;
-        if(c.chiave==='fixedCosts') console.log('Loaded fixedCosts:', parsed, 'typeof:', typeof parsed, 'isArray:', Array.isArray(parsed));
       }catch(e){
         DB.configCache[c.chiave]=c.valore;
-        if(c.chiave==='fixedCosts') console.log('Failed to parse fixedCosts, using raw:', c.valore, 'error:', e.message);
       }
     });
     ['fixedCosts','monthlyClients','monthlyClientsExcluded','goals'].forEach(key=>{
@@ -885,35 +883,8 @@ function sortInv(col){
 
 function setInvFilter(f){
   invFilter=f;
-  // Re-render pills
-  const labels={all:'Tutte',paid:'Pagate',pending:'In attesa',draft:'Bozze',overdue:'Scadute'};
-  const el=document.getElementById('invPills');
-  if(el)el.innerHTML=Object.keys(labels).map(k=>`<button class="pill ${invFilter===k?'active':'inactive'}" onclick="setInvFilter('${k}')">${labels[k]}</button>`).join('');
-  // Re-render table
-  const all=DB.fatture;
-  function filteredInv(){
-    const q=(filters.invoices.q||'').toLowerCase();
-    const annoF=filters.invoices.anno||'';
-    let r=invFilter==='all'?[...all]:all.filter(i=>getStatoEffettivo(i)===invFilter);
-    if(q)r=r.filter(i=>(i.clienteNome||'').toLowerCase().includes(q)||(i.descrizione||'').toLowerCase().includes(q));
-    if(annoF)r=r.filter(i=>(i.data||'').startsWith(annoF));
-    r.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
-    return r;
-  }
-  const filtered=filteredInv();
-  const cnt=document.getElementById('invCount');
-  if(cnt)cnt.textContent=filtered.length+' / '+all.length+' fatture';
-  const tbody=document.getElementById('invTbody');
-  if(!tbody)return;
-  const lmap={paid:'Pagata',pending:'In attesa',draft:'Bozza',overdue:'Scaduta',annullata:'Annullata'};
-  tbody.innerHTML=filtered.length?filtered.map(inv=>`<tr onclick="openInvDetail('${inv.id}')">
-    <td><div class="td-name">${inv.clienteNome||clientName(inv.clienteId)}</div></td>
-    <td style="color:var(--text2)">${inv.descrizione||''}</td>
-    <td style="color:var(--text3)">${fmtDate(inv.data)}</td>
-    <td><span style="font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:4px">${inv.fonte==='qonto'?'Qonto':'Manuale'}</span></td>
-    <td>${statusBadge[getStatoEffettivo(inv)]||''}</td>
-    <td class="td-mono" style="text-align:right">${fmtEur(inv.importo)}</td>
-  </tr>`).join(''):'<tr><td colspan="6" style="color:var(--text3);text-align:center;padding:24px">Nessuna fattura trovata.</td></tr>';
+  const c=document.getElementById('mainContent');
+  if(c)renderInvoices(c);
 }
 
 // ── INVOICE DETAIL MODAL ─────────────────────────────────────
@@ -1420,7 +1391,7 @@ function renderExpenses(c){
   if(filters.expenses.q)document.getElementById('expClear').classList.add('vis');
 
   const labs=Object.keys(byCatAll),vals=Object.values(byCatAll),cols=labs.map(l=>catColors[l]||'#9CA3AF');
-  if(labs.length){charts.exp=new Chart(document.getElementById('expChart'),{type:'bar',data:{labels:labs,datasets:[{data:vals,backgroundColor:cols,borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},schools:{x:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+v},grid:{color:'#F3F4F6'},border:{display:false}},y:{ticks:{font:{size:11},color:'#6B7280'},grid:{display:false},border:{display:false}}}}});}
+  if(labs.length){charts.exp=new Chart(document.getElementById('expChart'),{type:'bar',data:{labels:labs,datasets:[{data:vals,backgroundColor:cols,borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11},color:'#9CA3AF',callback:v=>'€'+v},grid:{color:'#F3F4F6'},border:{display:false}},y:{ticks:{font:{size:11},color:'#6B7280'},grid:{display:false},border:{display:false}}}}});}
 }
 function openLinkFornModal(expId){
   const e=DB.spese.find(x=>String(x.id)===String(expId));
@@ -1721,9 +1692,7 @@ function loadConfigFromLocal(key){
   }catch(e){console.warn('Unable to load config from localStorage',key,e);return null;}
 }
 function getConfig(key){
-  const val = DB.configCache[key]||null;
-  if(key === 'fixedCosts' || key==='goals') console.log('getConfig('+key+'):', val, 'typeof:', typeof val, 'isArray:', Array.isArray(val));
-  return val;
+  return DB.configCache[key]||null;
 }
 async function setConfigAsync(key,val){
   DB.configCache[key]=val;
@@ -1774,14 +1743,8 @@ function getMonthlyClients(){
 }
 function getFixedCosts(){
   const list=getFixedCostsConfig();
-  console.log('getFixedCosts - list:', list, 'typeof:', typeof list, 'isArray:', Array.isArray(list));
-  if(!Array.isArray(list)) {
-    console.warn('getFixedCosts - list is not an array! Returning 0');
-    return 0;
-  }
-  const total = list.reduce((s,c)=>s+Number(c.importo||0),0);
-  console.log('getFixedCosts - total:', total);
-  return total;
+  if(!Array.isArray(list)) return 0;
+  return list.reduce((s,c)=>s+Number(c.importo||0),0);
 }
 function getMonthlyClientsRevenue(){
   const list=getMonthlyClients();
@@ -1909,15 +1872,10 @@ function addManualFixedCostModal(){
   `,async()=>{
     const desc=document.getElementById('mf_mdesc').value.trim();
     const amt=parseFloat(document.getElementById('mf_mamt').value)||0;
-    console.log('Adding manual fixed cost:', {desc, amt});
     if(!desc||!amt){toast('Compila descrizione e importo','error');return;}
     const list=getFixedCostsConfig();
-    console.log('Current list before push:', list);
     list.push({id:uid(),tipo:'manual',importo:amt,descrizione:desc});
-    console.log('List after push:', list);
-    console.log('About to save config with:', list);
     await setFixedCostsConfig(list);
-    console.log('Config saved, now closing modal and rendering');
     closeModal();render();editFixedCosts();
   },'Aggiungi');
 }
@@ -1939,8 +1897,6 @@ function editGoal(i){
     closeModal();render();
   });
 }
-
-async function saveClientNotes(id,val){const cl=clientById(id);if(cl){cl.note=val;await save('saveClient',cl);}}
 
 document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
