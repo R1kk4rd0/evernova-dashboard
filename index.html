@@ -446,10 +446,14 @@ function renderOverview(c){
     if(DB.goals.length>0){
       html=DB.goals.map((g,i)=>{
         const normalizedLabel = String(g.label||'').toLowerCase();
-        const isMonthly = normalizedLabel.includes('fatturato') || normalizedLabel.includes('ricorrente');
+        const isFatturato = normalizedLabel.includes('fatturato');
+        const isRetainer = normalizedLabel.includes('retainer');
         const monthlyRevenue = getMonthlyClientsRevenue();
-        const currentValue = isMonthly ? monthlyRevenue : Number(g.current||0);
-        console.log('Rendering goal', g.label, 'isMonthly=', isMonthly, 'currentValue=', currentValue, 'monthlyRevenue=', monthlyRevenue, 'g.current=', g.current, 'g.target=', g.target);
+        const monthlyClientsCount = getMonthlyClients().length;
+        let currentValue;
+        if(isFatturato) currentValue = monthlyRevenue;
+        else if(isRetainer) currentValue = monthlyClientsCount;
+        else currentValue = Number(g.current||0);
         const pct=Math.min(100,Math.round(currentValue/Math.max(Number(g.target||1),1)*100));
         const col=pct>=80?'#16A34A':pct>=50?'#4F46E5':'#D97706';
         const click=i===0?'onclick="showMonthlyClientsModal()"':'onclick="editGoal('+i+')"';
@@ -1670,7 +1674,20 @@ function removeFixedCost(id){
   const list=getFixedCostsConfig().filter(c=>String(c.id)!==String(id));
   setFixedCostsConfig(list).then(()=>{render();editFixedCosts();}).catch(e=>{console.error(e);editFixedCosts();});
 }
-function editGoal(i){const g=DB.goals[i];openModal('Aggiorna obiettivo',g.label,`<div class="modal-row"><div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div><div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;await save('saveGoals',{goals:DB.goals});closeModal();render();});}
+function editGoal(i){
+  const g=DB.goals[i];
+  const isRetainer = String(g.label||'').toLowerCase().includes('retainer');
+  const currentClientsCount = getMonthlyClients().length;
+  const curInputField = isRetainer 
+    ? `<div class="modal-field"><label>Clienti ricorrenti (auto)</label><input type="number" value="${currentClientsCount}" readonly style="background:var(--surface2);cursor:not-allowed"></div>`
+    : `<div class="modal-field"><label>Valore attuale</label><input id="mf_gcur" type="number" value="${g.current}"></div>`;
+  openModal('Aggiorna obiettivo',g.label,`<div class="modal-row">${curInputField}<div class="modal-field"><label>Target</label><input id="mf_gtgt" type="number" value="${g.target}"></div></div>`,async()=>{
+    if(!isRetainer) g.current=parseFloat(document.getElementById('mf_gcur').value)||g.current;
+    g.target=parseFloat(document.getElementById('mf_gtgt').value)||g.target;
+    await save('saveGoals',{goals:DB.goals});
+    closeModal();render();
+  });
+}
 
 async function saveClientNotes(id,val){const cl=clientById(id);if(cl){cl.note=val;await save('saveClient',cl);}}
 
