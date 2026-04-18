@@ -263,6 +263,13 @@ function renderCashflowChart(year) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      onClick: (evt, els) => {
+        if (!els.length) return;
+        openCashflowMonthDetail(months[els[0].index], currentMonthKey);
+      },
+      onHover: (evt, els) => {
+        if (evt.native) evt.native.target.style.cursor = els.length ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { position: 'top', labels: { font: { size: 12 }, boxWidth: 12, usePointStyle: true } },
         tooltip: {
@@ -292,4 +299,75 @@ function renderCashflowChart(year) {
       }
     }
   });
+}
+
+function openCashflowMonthDetail(monthKey, currentMonthKey) {
+  const label    = getMonthLabel(monthKey);
+  const isPast   = monthKey < currentMonthKey;
+  const isFuture = monthKey > currentMonthKey;
+
+  const paidInvs = DB.fatture.filter(inv =>
+    getStatoEffettivo(inv) === 'paid' && getMonthKey(inv.data || '') === monthKey
+  );
+  const pendingInvs = DB.fatture.filter(inv => {
+    const s = getStatoEffettivo(inv);
+    if (['paid', 'draft', 'annullata', 'nota'].includes(s)) return false;
+    return getMonthKey(inv.scadenza || inv.data || '') === monthKey;
+  });
+  const showInvs    = isPast ? paidInvs : pendingInvs;
+  const retainerList = !isPast ? getMonthlyClients() : [];
+  const retainerTot  = retainerList.reduce((s, c) => s + Number(c.importoMensile || 0), 0);
+
+  const actualExp = DB.spese.filter(exp => getMonthKey(exp.data || '') === monthKey);
+  const fixedList = !isPast ? getFixedCostsConfig() : [];
+
+  const totalRicavi = showInvs.reduce((s, i) => s + Number(i.importo || 0), 0) + retainerTot;
+  const totalCosti  = isPast
+    ? actualExp.reduce((s, e) => s + Number(e.importo || 0), 0)
+    : getFixedCosts();
+  const netto = totalRicavi - totalCosti;
+
+  const badge = isPast
+    ? '<span style="font-size:11px;background:var(--surface2);color:var(--text3);padding:2px 8px;border-radius:4px">Reale</span>'
+    : '<span style="font-size:11px;background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:4px">Previsione</span>';
+
+  function section(title, color, rows, total, emptyMsg) {
+    const rowsHtml = rows.length
+      ? rows.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--text2);flex:1;padding-right:8px">${r.label}</div>
+          <div style="font-size:13px;font-weight:600;color:${color};white-space:nowrap">${fmtEur(r.amt)}</div>
+        </div>`).join('')
+      : `<div style="font-size:12px;color:var(--text3);padding:8px 0">${emptyMsg}</div>`;
+    return `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);margin-bottom:6px">${title}</div>
+        ${rowsHtml}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:2px">
+          <div style="font-size:12px;font-weight:600;color:var(--text2)">Totale</div>
+          <div style="font-size:14px;font-weight:700;color:${color}">${fmtEur(total)}</div>
+        </div>
+      </div>`;
+  }
+
+  const ricaviRows = [
+    ...showInvs.map(inv => ({ label: (inv.clienteNome || clientName(inv.clienteId)) + (inv.descrizione ? ' — ' + inv.descrizione : ''), amt: Number(inv.importo || 0) })),
+    ...retainerList.map(c => ({ label: c.nome + ' (retainer)', amt: Number(c.importoMensile || 0) })),
+  ];
+  const costiRows = isPast
+    ? actualExp.map(e => ({ label: (e.descrizione || '') + ' · ' + (e.categoria || ''), amt: Number(e.importo || 0) }))
+    : fixedList.map(c => ({ label: c.descrizione + (c.tipo === 'expense' ? ' (da spesa)' : ' (fisso)'), amt: Number(c.importo || 0) }));
+
+  const netColor = netto >= 0 ? 'var(--green)' : 'var(--red)';
+  const body = `
+    <div style="margin-bottom:14px">${badge}</div>
+    ${section(isPast ? 'Ricavi' : 'Ricavi previsti', 'var(--green)', ricaviRows, totalRicavi, 'Nessun ricavo.')}
+    ${section(isPast ? 'Costi' : 'Costi previsti', 'var(--red)', costiRows, totalCosti, 'Nessun costo.')}
+    <div style="background:var(--surface2);border-radius:8px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;font-weight:600">Netto</div>
+      <div style="font-size:20px;font-weight:700;color:${netColor}">${fmtEur(netto)}</div>
+    </div>`;
+
+  openModal(label, '', body, closeModal, 'Chiudi');
+  document.getElementById('modalSaveBtn').style.cssText = 'background:var(--surface2);color:var(--text2);border:1px solid var(--border)';
 }
