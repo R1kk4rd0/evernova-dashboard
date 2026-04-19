@@ -794,6 +794,7 @@ function renderProjectDetail(id, c) {
             <div style="font-size:11px;color:var(--text3)">${forn ? cost.descrizione + ' · ' : ''}${cost.categoria} · ${fmtDate(cost.data)}</div>
           </div>
           <div style="font-size:13px;font-weight:600;color:var(--red)">${fmtEur(cost.importo)}</div>
+          <button class="btn-ghost" style="font-size:11px;padding:2px 6px" onclick="openEditCostModal('${cost.id}','${id}')">✎</button>
           <span onclick="delCost('${cost.id}','${id}')" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px">×</span>
         </div>`;
       }).join('') : '<div style="font-size:13px;color:var(--text3)">Nessun costo.</div>'}
@@ -808,8 +809,11 @@ function renderProjectDetail(id, c) {
         <div class="margin-row"><span style="font-size:14px;font-weight:600">Margine netto</span><span style="font-size:18px;font-weight:700;color:${mc}">${fmtEur(margin)}</span></div>
         <div class="margin-row"><span style="font-size:12px;color:var(--text3)">Percentuale</span><span style="font-size:13px;font-weight:600;color:${mc}">${mPct}%</span></div>
       </div>
-      <div class="section-divider" style="margin-top:16px">Note</div>
-      <textarea class="notes-area" placeholder="Obiettivi, deliverable..." onblur="saveProjNotes('${id}',this.value)">${p.note || ''}</textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">
+        <div class="section-divider" style="margin:0">Note</div>
+        <button class="btn-ghost" style="font-size:12px" onclick="saveProjNotes('${id}',document.getElementById('projNotes').value)">Salva</button>
+      </div>
+      <textarea id="projNotes" class="notes-area" placeholder="Obiettivi, deliverable..." onblur="saveProjNotes('${id}',this.value)">${p.note || ''}</textarea>
     </div>
   </div>
   <div class="card" style="margin-top:16px">

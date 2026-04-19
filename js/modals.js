@@ -321,6 +321,40 @@ function openAddCostModal(projId) {
   );
 }
 
+function openEditCostModal(costId, projId) {
+  const cost = DB.costi.find(x => String(x.id) === String(costId));
+  if (!cost) return;
+  const fornOpts = DB.fornitori.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(f =>
+    `<option value="${f.id}" ${String(f.id) === String(cost.fornitoreId) ? 'selected' : ''}>${f.nome}</option>`
+  ).join('');
+  const catOpts = ['Collaboratori','Trasferta','Noleggio','Software','Altro'].map(c =>
+    `<option value="${c}" ${c === cost.categoria ? 'selected' : ''}>${c}</option>`
+  ).join('');
+  openModal('Modifica costo', cost.descrizione, `
+    <div class="modal-field"><label>Fornitore (opzionale)</label>
+      <select id="mf_cforn"><option value="">— nessuno —</option>${fornOpts}</select>
+    </div>
+    <div class="modal-field"><label>Descrizione</label><input id="mf_cdesc" value="${(cost.descrizione || '').replace(/"/g, '&quot;')}"></div>
+    <div class="modal-row">
+      <div class="modal-field"><label>Importo €</label><input id="mf_camt" type="number" value="${cost.importo || ''}"></div>
+      <div class="modal-field"><label>Categoria</label><select id="mf_ccat">${catOpts}</select></div>
+    </div>
+    <div class="modal-field"><label>Data</label><input id="mf_cdate" type="date" value="${cost.data || ''}"></div>`,
+    async () => {
+      const desc = document.getElementById('mf_cdesc').value.trim();
+      const amt  = parseFloat(document.getElementById('mf_camt').value);
+      if (!desc || !amt) return;
+      cost.descrizione  = desc;
+      cost.importo      = amt;
+      cost.categoria    = document.getElementById('mf_ccat').value;
+      cost.data         = document.getElementById('mf_cdate').value;
+      cost.fornitoreId  = document.getElementById('mf_cforn').value || '';
+      await save('saveCost', cost);
+      closeModal(); showDetail('project', projId);
+    }
+  );
+}
+
 // ── CLIENTI RICORRENTI ────────────────────────────────────────
 
 /** Apre il modal di gestione clienti ricorrenti (retainer). */
