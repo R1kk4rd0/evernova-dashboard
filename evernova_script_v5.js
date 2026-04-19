@@ -176,11 +176,25 @@ function syncFatture() {
     const invoices = data.client_invoices || [];
     invoices.forEach(inv => {
       if (byQontoId.has(inv.id)) {
-        const ex = byQontoId.get(inv.id);
-        const nuovoStato = mapStato(inv.status);
-        if (ex.stato !== nuovoStato) {
-          ex.stato = nuovoStato;
-          ex.updatedAt = new Date().toISOString();
+        const ex          = byQontoId.get(inv.id);
+        const nuovoStato  = mapStato(inv.status);
+        const nuovoNum    = inv.number || ex.descrizione;
+        const nuovoImporto = (inv.total_amount_cents || 0) / 100;
+        const changed = ex.stato !== nuovoStato
+                     || ex.descrizione !== nuovoNum
+                     || String(ex.importo) !== String(nuovoImporto)
+                     || ex.data !== (inv.issue_date || ex.data)
+                     || ex.scadenza !== (inv.due_date || ex.scadenza);
+        if (changed) {
+          ex.stato      = nuovoStato;
+          ex.descrizione = nuovoNum;
+          ex.importo    = nuovoImporto;
+          ex.data       = inv.issue_date || ex.data;
+          ex.scadenza   = inv.due_date   || ex.scadenza;
+          ex.invoiceUrl = inv.invoice_url || ex.invoiceUrl;
+          ex.itemTitolo = (inv.items && inv.items[0]) ? (inv.items[0].title || inv.items[0].description || '') : ex.itemTitolo;
+          ex.tipoFattura = inv.invoice_type || ex.tipoFattura;
+          ex.updatedAt  = new Date().toISOString();
           saveRow(SHEET_NAMES.fatture, ex, invoiceHeaders());
         }
         return;
