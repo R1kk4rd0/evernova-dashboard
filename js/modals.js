@@ -202,6 +202,7 @@ function openEditProjectModal(id) {
   if (!p) return;
   const clientOpts = DB.clienti.map(c => `<option value="${c.id}" ${String(c.id) === String(p.clienteId) ? 'selected' : ''}>${getNome(c)}</option>`).join('');
   openModal('Modifica progetto', p.nome, `
+    <div class="modal-field"><label>Nome</label><input id="mf_pname" value="${(p.nome || '').replace(/"/g, '&quot;')}"></div>
     <div class="modal-field"><label>Cliente</label>
       <select id="mf_pclient"><option value="">— nessuno —</option>${clientOpts}</select>
     </div>
@@ -230,6 +231,8 @@ function openEditProjectModal(id) {
       <button onclick="deleteProject('${p.id}')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">Elimina progetto</button>
     </div>`,
     async () => {
+      const nuovoNome = document.getElementById('mf_pname').value.trim();
+      if (nuovoNome) p.nome = nuovoNome;
       p.clienteId   = document.getElementById('mf_pclient').value;
       p.budget      = parseFloat(document.getElementById('mf_pbudget').value) || p.budget;
       p.stato       = document.getElementById('mf_pstatus').value;
