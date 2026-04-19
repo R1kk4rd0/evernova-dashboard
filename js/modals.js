@@ -200,7 +200,11 @@ function openNewProjectModal() {
 function openEditProjectModal(id) {
   const p = DB.progetti.find(x => String(x.id) === String(id));
   if (!p) return;
+  const clientOpts = DB.clienti.map(c => `<option value="${c.id}" ${String(c.id) === String(p.clienteId) ? 'selected' : ''}>${getNome(c)}</option>`).join('');
   openModal('Modifica progetto', p.nome, `
+    <div class="modal-field"><label>Cliente</label>
+      <select id="mf_pclient"><option value="">— nessuno —</option>${clientOpts}</select>
+    </div>
     <div class="modal-row">
       <div class="modal-field"><label>Budget €</label>
         <input id="mf_pbudget" type="number" value="${p.budget || 0}">
@@ -223,6 +227,7 @@ function openEditProjectModal(id) {
       </div>
     </div>`,
     async () => {
+      p.clienteId   = document.getElementById('mf_pclient').value;
       p.budget      = parseFloat(document.getElementById('mf_pbudget').value) || p.budget;
       p.stato       = document.getElementById('mf_pstatus').value;
       p.avanzamento = parseInt(document.getElementById('mf_pprog').value) || p.avanzamento;
