@@ -80,6 +80,7 @@ function navTo(page) {
   detailCtx   = { type: null, id: null };
   selectMode  = false;
   selectedClients = new Set();
+  sessionStorage.setItem('evPage', page);
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
   render();
