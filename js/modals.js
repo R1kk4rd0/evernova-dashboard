@@ -225,6 +225,9 @@ function openEditProjectModal(id) {
       <div class="modal-field"><label>Data fine</label>
         <input id="mf_pend" type="date" value="${p.dataFine || ''}">
       </div>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <button onclick="deleteProject('${p.id}')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">Elimina progetto</button>
     </div>`,
     async () => {
       p.clienteId   = document.getElementById('mf_pclient').value;
@@ -236,6 +239,17 @@ function openEditProjectModal(id) {
       closeModal(); showDetail('project', id);
     }
   );
+}
+
+async function deleteProject(id) {
+  const p = DB.progetti.find(x => String(x.id) === String(id));
+  if (!p) return;
+  if (!confirm(`Eliminare "${p.nome}"?\nVerranno rimossi anche i costi associati.`)) return;
+  await del('deleteProject', id);
+  DB.progetti = DB.progetti.filter(x => String(x.id) !== String(id));
+  DB.costi    = DB.costi.filter(x => String(x.progettoId) !== String(id));
+  closeModal();
+  navTo('projects');
 }
 
 /**
