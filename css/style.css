@@ -77,6 +77,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .data-table td{padding:12px 12px;font-size:13px;color:var(--text2);border-bottom:1px solid var(--border)}
 .data-table tr:last-child td{border-bottom:none}
 .data-table tr:hover td{background:var(--surface2);cursor:pointer}
+.data-table tr.row-selected td{background:rgba(99,102,241,0.07)}
 .td-name{font-size:13px;color:var(--text);font-weight:500}
 .td-mono{font-size:13px;color:var(--text);font-weight:500}
 

@@ -581,19 +581,33 @@ function renderProjects(c) {
     return '<span class="sort-arrow' + (projSort.col === col ? ' active' : '') + '">' + a + '</span>';
   }
 
+  function updateBulkBar() {
+    const bar = document.getElementById('projBulkBar');
+    if (!bar) return;
+    const n = projSelection.size;
+    bar.style.display = n > 0 ? 'flex' : 'none';
+    const lbl = document.getElementById('projBulkCount');
+    if (lbl) lbl.textContent = n + ' progett' + (n === 1 ? 'o' : 'i') + ' selezionat' + (n === 1 ? 'o' : 'i');
+  }
+
   function renderTable() {
     const lista = filtered();
     const cnt   = document.getElementById('projCount');
     if (cnt) cnt.textContent = lista.length + ' / ' + DB.progetti.length + ' progetti';
     const tbody = document.getElementById('projTbody');
     if (!tbody) return;
+    const allIds = lista.map(p => p.id);
+    const allChecked = allIds.length > 0 && allIds.every(id => projSelection.has(id));
     tbody.innerHTML = lista.length ? lista.map(p => {
       const costs      = projCostTotal(p.id), margin = projMargin(p);
       const mPct       = Number(p.budget || 0) > 0 ? Math.round(margin / Number(p.budget) * 100) : 0;
       const mc         = mPct >= 60 ? 'var(--green)' : mPct >= 30 ? 'var(--amber)' : 'var(--red)';
       const num        = projNum(p);
       const nomePulito = num ? p.nome.replace(/^\d+\s*-\s*/, '') : p.nome;
-      return '<tr onclick="showDetail(\'project\',\'' + p.id + '\')" style="cursor:pointer">'
+      const checked    = projSelection.has(p.id) ? 'checked' : '';
+      return '<tr onclick="showDetail(\'project\',\'' + p.id + '\')" style="cursor:pointer" class="' + (projSelection.has(p.id) ? 'row-selected' : '') + '">'
+        + '<td onclick="event.stopPropagation()" style="width:32px;text-align:center">'
+        + '<input type="checkbox" ' + checked + ' onchange="toggleProjSel(\'' + p.id + '\',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>'
         + '<td style="color:var(--text3);font-size:12px;font-weight:600;width:40px">' + (num || '—') + '</td>'
         + '<td><div style="font-size:13px;font-weight:600;color:var(--text)">' + nomePulito + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:1px">' + clientName(p.clienteId) + '</div></td>'
@@ -606,10 +620,11 @@ function renderProjects(c) {
         + '<td onclick="event.stopPropagation()" style="text-align:right">'
         + '<button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="openEditProjectModal(\'' + p.id + '\')">✎</button></td>'
         + '</tr>';
-    }).join('') : '<tr><td colspan="8" style="color:var(--text3);text-align:center;padding:32px">Nessun risultato.</td></tr>';
+    }).join('') : '<tr><td colspan="9" style="color:var(--text3);text-align:center;padding:32px">Nessun risultato.</td></tr>';
 
     const thead = document.getElementById('projThead');
     if (thead) thead.innerHTML = '<tr>'
+      + '<th style="width:32px;text-align:center"><input type="checkbox" ' + (allChecked ? 'checked' : '') + ' onchange="toggleAllProjSel(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>'
       + '<th class="th-sort" onclick="sortProj(\'num\')" style="width:40px"># ' + arrow('num') + '</th>'
       + '<th class="th-sort" onclick="sortProj(\'nome\')">Nome ' + arrow('nome') + '</th>'
       + '<th>Stato</th>'
@@ -619,11 +634,15 @@ function renderProjects(c) {
       + '<th class="th-sort" onclick="sortProj(\'dataInizio\')">Data ' + arrow('dataInizio') + '</th>'
       + '<th></th>'
       + '</tr>';
+    updateBulkBar();
   }
+
+  projSelection.clear();
 
   const active       = DB.progetti.filter(p => p.stato === 'active');
   const totalBudget  = DB.progetti.reduce((s, p) => s + Number(p.budget || 0), 0);
   const totalMargine = DB.progetti.reduce((s, p) => s + projMargin(p), 0);
+  const clientOpts   = DB.clienti.map(cl => `<option value="${cl.id}">${getNome(cl)}</option>`).join('');
 
   c.innerHTML = `
   <div class="kpi-row" style="margin-bottom:24px">
@@ -640,6 +659,21 @@ function renderProjects(c) {
       <option value="paused">In pausa</option><option value="done">Completati</option>
     </select>
     <span class="results-count" id="projCount"></span>
+  </div>
+  <div id="projBulkBar" style="display:none;align-items:center;gap:10px;background:var(--indigo,#6366f1);color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
+    <span id="projBulkCount" style="font-size:13px;font-weight:600;flex:1"></span>
+    <select id="bulkCliente" style="padding:5px 10px;border-radius:6px;border:none;font-size:13px;min-width:180px">
+      <option value="">Assegna cliente...</option>${clientOpts}
+    </select>
+    <select id="bulkStato" style="padding:5px 10px;border-radius:6px;border:none;font-size:13px">
+      <option value="">Cambia stato...</option>
+      <option value="proposal">Proposta</option>
+      <option value="active">Attivo</option>
+      <option value="paused">In pausa</option>
+      <option value="done">Completato</option>
+    </select>
+    <button onclick="applyBulkProj()" style="background:#fff;color:var(--indigo,#6366f1);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Applica</button>
+    <button onclick="projSelection.clear();renderTable()" style="background:none;border:1px solid rgba(255,255,255,0.5);color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px">Deseleziona</button>
   </div>
   <div class="card">
     <table class="data-table">
@@ -670,6 +704,55 @@ function renderProjects(c) {
 function sortProj(col) {
   if (projSort.col === col) { projSort.dir = projSort.dir === 'asc' ? 'desc' : 'asc'; }
   else { projSort.col = col; projSort.dir = col === 'dataInizio' || col === 'budget' || col === 'margine' ? 'desc' : 'asc'; }
+  const c = document.getElementById('mainContent');
+  if (c) renderProjects(c);
+}
+
+function toggleProjSel(id, checked) {
+  if (checked) projSelection.add(id); else projSelection.delete(id);
+  const bar = document.getElementById('projBulkBar');
+  const lbl = document.getElementById('projBulkCount');
+  const n   = projSelection.size;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (lbl) lbl.textContent = n + ' progett' + (n === 1 ? 'o' : 'i') + ' selezionat' + (n === 1 ? 'o' : 'i');
+  const allCbs = document.querySelectorAll('#projThead input[type=checkbox]');
+  const allRowCbs = document.querySelectorAll('#projTbody input[type=checkbox]');
+  if (allCbs[0]) allCbs[0].checked = allRowCbs.length > 0 && [...allRowCbs].every(cb => cb.checked);
+  const row = document.querySelector(`#projTbody tr input[value="${id}"]`);
+  if (row) row.closest('tr').classList.toggle('row-selected', checked);
+}
+
+function toggleAllProjSel(checked) {
+  document.querySelectorAll('#projTbody input[type=checkbox]').forEach(cb => {
+    cb.checked = checked;
+    const id = cb.getAttribute('onchange').match(/'([^']+)'/)[1];
+    if (checked) projSelection.add(id); else projSelection.delete(id);
+    cb.closest('tr').classList.toggle('row-selected', checked);
+  });
+  const bar = document.getElementById('projBulkBar');
+  const lbl = document.getElementById('projBulkCount');
+  const n   = projSelection.size;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (lbl) lbl.textContent = n + ' progett' + (n === 1 ? 'o' : 'i') + ' selezionat' + (n === 1 ? 'o' : 'i');
+}
+
+async function applyBulkProj() {
+  const ids       = [...projSelection];
+  if (!ids.length) return;
+  const clienteId = document.getElementById('bulkCliente').value;
+  const stato     = document.getElementById('bulkStato').value;
+  if (!clienteId && !stato) { toast('Seleziona almeno un campo da modificare', 'warn'); return; }
+  showLoading('Salvataggio...');
+  for (const id of ids) {
+    const p = DB.progetti.find(x => String(x.id) === String(id));
+    if (!p) continue;
+    if (clienteId) p.clienteId = clienteId;
+    if (stato)     p.stato     = stato;
+    await apiPost('saveProject', p);
+  }
+  hideLoading();
+  projSelection.clear();
+  toast(`${ids.length} progetti aggiornati`);
   const c = document.getElementById('mainContent');
   if (c) renderProjects(c);
 }

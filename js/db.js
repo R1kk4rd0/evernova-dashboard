@@ -24,8 +24,9 @@ let filters = {
 };
 let charts      = {};
 let modalSaveFn = null;
-let invSort     = { col: 'data', dir: 'desc' };
-let projSort    = { col: 'dataInizio', dir: 'desc' };
+let invSort      = { col: 'data', dir: 'desc' };
+let projSort     = { col: 'dataInizio', dir: 'desc' };
+let projSelection = new Set();
 let cashflowYear = 'mixed';
 let revYear      = '';
 
