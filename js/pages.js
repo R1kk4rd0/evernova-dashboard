@@ -774,7 +774,7 @@ function renderProjectDetail(id, c) {
   <div class="detail-back" onclick="backToList()">← Tutti i progetti</div>
   <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:12px">
     <div><div class="detail-name">${p.nome}</div><div class="detail-meta">${clientName(p.clienteId)} · ${p.tipo || ''}</div></div>
-    <div style="display:flex;gap:8px;align-items:center">${projBadge[p.stato] || ''}<button class="btn-ghost" onclick="openEditProjectModal('${id}')">Modifica</button></div>
+    <div style="display:flex;gap:8px;align-items:center">${projBadge[p.stato] || ''}<button class="btn-ghost" onclick="openEditProjectModal('${id}')">Modifica</button><button class="btn-ghost" style="color:var(--green);border-color:var(--green)" onclick="saveProjNotes('${id}',document.getElementById('projNotes').value)">Salva note</button></div>
   </div>
   <div class="kpi-row" style="margin-bottom:24px">
     <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Budget</div></div><div class="kpi-value">${fmtEur(p.budget)}</div></div>
@@ -809,11 +809,8 @@ function renderProjectDetail(id, c) {
         <div class="margin-row"><span style="font-size:14px;font-weight:600">Margine netto</span><span style="font-size:18px;font-weight:700;color:${mc}">${fmtEur(margin)}</span></div>
         <div class="margin-row"><span style="font-size:12px;color:var(--text3)">Percentuale</span><span style="font-size:13px;font-weight:600;color:${mc}">${mPct}%</span></div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">
-        <div class="section-divider" style="margin:0">Note</div>
-        <button class="btn-ghost" style="font-size:12px" onclick="saveProjNotes('${id}',document.getElementById('projNotes').value)">Salva</button>
-      </div>
-      <textarea id="projNotes" class="notes-area" placeholder="Obiettivi, deliverable..." onblur="saveProjNotes('${id}',this.value)">${p.note || ''}</textarea>
+      <div class="section-divider" style="margin-top:16px">Note</div>
+      <textarea id="projNotes" class="notes-area" placeholder="Obiettivi, deliverable...">${p.note || ''}</textarea>
     </div>
   </div>
   <div class="card" style="margin-top:16px">
