@@ -129,12 +129,20 @@ async function del(action, id) {
  */
 async function doSync() {
   showLoading('Sincronizzazione Qonto...');
+  const ctrl    = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 180000); // 3 min max
   try {
-    const res = await apiGet('sync');
+    const qs  = new URLSearchParams({ action: 'sync' }).toString();
+    const res = await fetch(`${API}?${qs}`, { signal: ctrl.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
     await loadAll();
-    toast(`Sync OK — clienti:${res.clientiImportati} fatture:${res.fattureImportate} spese:${res.speseImportate}`, 'success');
+    toast(`Sync OK — clienti:${data.clientiImportati} fatture:${data.fattureImportate} spese:${data.speseImportate}`, 'success');
     render();
   } catch (e) {
-    toast('Errore sync: ' + e.message, 'error');
+    clearTimeout(timeout);
+    toast('Errore sync: ' + (e.name === 'AbortError' ? 'timeout (>3 min), riprova' : e.message), 'error');
   } finally { hideLoading(); }
 }
