@@ -244,10 +244,25 @@ function openEditProjectModal(id) {
 async function deleteProject(id) {
   const p = DB.progetti.find(x => String(x.id) === String(id));
   if (!p) return;
-  if (!confirm(`Eliminare "${p.nome}"?\nVerranno rimossi anche i costi associati.`)) return;
-  await del('deleteProject', id);
-  DB.progetti = DB.progetti.filter(x => String(x.id) !== String(id));
-  DB.costi    = DB.costi.filter(x => String(x.progettoId) !== String(id));
+  const costi      = DB.costi.filter(x => String(x.progettoId) === String(id));
+  const fornLinks  = DB.fornProgetti.filter(x => String(x.progettoId) === String(id));
+  const speseAssoc = DB.spese.filter(x => String(x.progettoId) === String(id));
+  const msg = `Eliminare "${p.nome}"?\n\n` +
+    `Verranno rimossi:\n` +
+    `- ${costi.length} costi\n` +
+    `- ${fornLinks.length} link fornitori\n` +
+    (speseAssoc.length ? `- ${speseAssoc.length} spese de-assegnate dal progetto\n` : '');
+  if (!confirm(msg)) return;
+  showLoading('Eliminazione...');
+  await apiPost('deleteProject', { id });
+  for (const c of costi)     await apiPost('deleteCost',       { id: c.id });
+  for (const f of fornLinks)  await apiPost('deleteFornProg',   { id: f.id });
+  for (const s of speseAssoc) await apiPost('saveExpense', { ...s, progettoId: '' });
+  hideLoading();
+  DB.progetti    = DB.progetti.filter(x => String(x.id) !== String(id));
+  DB.costi       = DB.costi.filter(x => String(x.progettoId) !== String(id));
+  DB.fornProgetti = DB.fornProgetti.filter(x => String(x.progettoId) !== String(id));
+  DB.spese.forEach(s => { if (String(s.progettoId) === String(id)) s.progettoId = ''; });
   closeModal();
   navTo('projects');
 }
