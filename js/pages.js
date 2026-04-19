@@ -125,8 +125,6 @@ function renderInvoices(c) {
     if (cnt) cnt.textContent = filtered.length + ' / ' + all.length + ' fatture';
     const tbody = document.getElementById('invTbody');
     if (!tbody) return;
-    const lmap = { paid: 'Pagata', pending: 'In attesa', draft: 'Bozza', overdue: 'Scaduta', annullata: 'Annullata' };
-    const bmap = { paid: 'b-paid', pending: 'b-pending', draft: 'b-draft', overdue: 'b-overdue', annullata: 'b-draft' };
     tbody.innerHTML = filtered.length ? filtered.map(inv => `<tr onclick="openInvDetail('${inv.id}')">
       <td><div class="td-name">${inv.clienteNome || clientName(inv.clienteId)}</div></td>
       <td style="color:var(--text2)">${inv.descrizione || ''}</td>
@@ -144,6 +142,38 @@ function renderInvoices(c) {
     el.innerHTML = Object.keys(labels).map(f => `<button class="pill ${invFilter === f ? 'active' : 'inactive'}" onclick="setInvFilter('${f}')">${labels[f]}</button>`).join('');
   }
 
+  function renderYearChart() {
+    const canvas = document.getElementById('fattureAnniChart');
+    if (!canvas) return;
+    if (charts.fattureAnni) { try { charts.fattureAnni.destroy(); } catch(e){} delete charts.fattureAnni; }
+    const yearsAsc = [...allAnni].reverse();
+    const emesso   = yearsAsc.map(y => all.filter(i => (i.data||'').startsWith(y) && i.stato !== 'draft').reduce((s,i) => s + Number(i.importo||0), 0));
+    const incassato = yearsAsc.map(y => all.filter(i => (i.data||'').startsWith(y) && getStatoEffettivo(i) === 'paid').reduce((s,i) => s + Number(i.importo||0), 0));
+    charts.fattureAnni = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: yearsAsc,
+        datasets: [
+          { label: 'Emesso', data: emesso, backgroundColor: 'rgba(99,102,241,0.85)', borderRadius: 6, borderSkipped: false },
+          { label: 'Incassato', data: incassato, backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 6, borderSkipped: false }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtEur(ctx.raw)}` } }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+          y: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 }, callback: v => '€' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
+        }
+      }
+    });
+  }
+
+  const annoSel = filters.invoices.anno || '';
+
   c.innerHTML = `
   <div class="kpi-row">
     <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Totale emesso</div></div><div class="kpi-value">${fmtEur(all.filter(i => i.stato !== 'draft').reduce((s, i) => s + Number(i.importo || 0), 0))}</div><div class="kpi-footer"><span class="kpi-delta pos">${all.length} fatture</span></div></div>
@@ -151,9 +181,16 @@ function renderInvoices(c) {
     <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Da incassare</div></div><div class="kpi-value">${fmtEur(all.filter(i => getStatoEffettivo(i) === 'pending').reduce((s, i) => s + Number(i.importo || 0), 0))}</div><div class="kpi-footer"><span class="kpi-delta neu">${all.filter(i => getStatoEffettivo(i) === 'pending').length} aperte</span></div></div>
     <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">Scadute</div></div><div class="kpi-value">${all.filter(i => getStatoEffettivo(i) === 'overdue').length}</div><div class="kpi-footer"><span class="kpi-delta neg">Da sollecitare</span></div></div>
   </div>
+  ${allAnni.length > 1 ? `<div class="card" style="padding:16px 20px 20px">
+    <div class="card-title" style="margin-bottom:12px">Fatturato per anno</div>
+    <div style="height:180px"><canvas id="fattureAnniChart"></canvas></div>
+  </div>` : ''}
   <div class="search-bar">
     <div class="search-wrap"><input class="search-input" id="invSearch" placeholder="Cerca cliente o numero fattura..."><button class="search-clear" id="invClear">×</button></div>
-    <select class="filter-select" id="invAnno"><option value="">Tutti gli anni</option>${allAnni.map(y => `<option value="${y}">${y}</option>`).join('')}</select>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="pill ${!annoSel ? 'active' : 'inactive'}" onclick="setInvAnno('')">Tutti</button>
+      ${allAnni.map(y => `<button class="pill ${annoSel === y ? 'active' : 'inactive'}" onclick="setInvAnno('${y}')">${y}</button>`).join('')}
+    </div>
     <span class="results-count" id="invCount"></span>
   </div>
   <div class="card">
@@ -170,6 +207,7 @@ function renderInvoices(c) {
 
   renderPills();
   renderTable();
+  if (allAnni.length > 1) renderYearChart();
 
   const invSrch = document.getElementById('invSearch');
   if (invSrch) {
@@ -180,17 +218,11 @@ function renderInvoices(c) {
       renderTable();
     });
   }
-  const invAnnoEl = document.getElementById('invAnno');
-  if (invAnnoEl) {
-    invAnnoEl.value = filters.invoices.anno || '';
-    invAnnoEl.addEventListener('change', function () { filters.invoices.anno = this.value; renderTable(); });
-  }
   document.getElementById('invClear').addEventListener('click', function () {
     filters.invoices.q = ''; filters.invoices.anno = '';
     document.getElementById('invSearch').value = '';
-    document.getElementById('invAnno').value = '';
     this.classList.remove('vis');
-    renderTable();
+    renderInvoices(document.getElementById('mainContent'));
   });
   if (filters.invoices.q) document.getElementById('invClear').classList.add('vis');
 }
@@ -212,6 +244,12 @@ function sortInv(col) {
  */
 function setInvFilter(f) {
   invFilter = f;
+  const c = document.getElementById('mainContent');
+  if (c) renderInvoices(c);
+}
+
+function setInvAnno(y) {
+  filters.invoices.anno = y;
   const c = document.getElementById('mainContent');
   if (c) renderInvoices(c);
 }
