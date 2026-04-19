@@ -671,7 +671,7 @@ function renderProjects(c) {
       <option value="done">Completato</option>
     </select>
     <button onclick="applyBulkProj()" style="background:#fff;color:var(--indigo,#6366f1);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Applica</button>
-    <button onclick="projSelection.clear();renderTable()" style="background:none;border:1px solid rgba(255,255,255,0.5);color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px">Deseleziona</button>
+    <button onclick="projSelection.clear();renderProjects(document.getElementById('mainContent'))" style="background:none;border:1px solid rgba(255,255,255,0.5);color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px">Deseleziona</button>
   </div>
   <div class="card">
     <table class="data-table">
