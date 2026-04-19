@@ -606,8 +606,6 @@ function renderProjects(c) {
       const nomePulito = num ? p.nome.replace(/^\d+\s*-\s*/, '') : p.nome;
       const checked    = projSelection.has(p.id) ? 'checked' : '';
       return '<tr onclick="showDetail(\'project\',\'' + p.id + '\')" style="cursor:pointer" class="' + (projSelection.has(p.id) ? 'row-selected' : '') + '">'
-        + '<td onclick="event.stopPropagation()" style="width:32px;text-align:center">'
-        + '<input type="checkbox" ' + checked + ' onchange="toggleProjSel(\'' + p.id + '\',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>'
         + '<td style="color:var(--text3);font-size:12px;font-weight:600;width:40px">' + (num || '—') + '</td>'
         + '<td><div style="font-size:13px;font-weight:600;color:var(--text)">' + nomePulito + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:1px">' + clientName(p.clienteId) + '</div></td>'
@@ -617,14 +615,14 @@ function renderProjects(c) {
         + '<td style="font-size:13px;font-weight:700;color:' + mc + ';text-align:right">' + fmtEur(margin)
         + '<span style="font-size:11px;font-weight:500;margin-left:4px">(' + mPct + '%)</span></td>'
         + '<td style="color:var(--text3);font-size:12px">' + fmtDate(p.dataInizio) + '</td>'
-        + '<td onclick="event.stopPropagation()" style="text-align:right">'
-        + '<button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="openEditProjectModal(\'' + p.id + '\')">✎</button></td>'
+        + '<td onclick="event.stopPropagation()" style="text-align:right;white-space:nowrap">'
+        + '<button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="openEditProjectModal(\'' + p.id + '\')">✎</button>'
+        + '<input type="checkbox" ' + checked + ' onchange="toggleProjSel(\'' + p.id + '\',this.checked)" style="cursor:pointer;width:15px;height:15px;margin-left:8px;vertical-align:middle"></td>'
         + '</tr>';
-    }).join('') : '<tr><td colspan="9" style="color:var(--text3);text-align:center;padding:32px">Nessun risultato.</td></tr>';
+    }).join('') : '<tr><td colspan="8" style="color:var(--text3);text-align:center;padding:32px">Nessun risultato.</td></tr>';
 
     const thead = document.getElementById('projThead');
     if (thead) thead.innerHTML = '<tr>'
-      + '<th style="width:32px;text-align:center"><input type="checkbox" ' + (allChecked ? 'checked' : '') + ' onchange="toggleAllProjSel(this.checked)" style="cursor:pointer;width:15px;height:15px"></th>'
       + '<th class="th-sort" onclick="sortProj(\'num\')" style="width:40px"># ' + arrow('num') + '</th>'
       + '<th class="th-sort" onclick="sortProj(\'nome\')">Nome ' + arrow('nome') + '</th>'
       + '<th>Stato</th>'
@@ -632,7 +630,7 @@ function renderProjects(c) {
       + '<th class="th-sort" onclick="sortProj(\'costi\')" style="text-align:right">Costi ' + arrow('costi') + '</th>'
       + '<th class="th-sort" onclick="sortProj(\'margine\')" style="text-align:right">Margine ' + arrow('margine') + '</th>'
       + '<th class="th-sort" onclick="sortProj(\'dataInizio\')">Data ' + arrow('dataInizio') + '</th>'
-      + '<th></th>'
+      + '<th style="text-align:right"><input type="checkbox" ' + (allChecked ? 'checked' : '') + ' onchange="toggleAllProjSel(this.checked)" style="cursor:pointer;width:15px;height:15px;vertical-align:middle"></th>'
       + '</tr>';
     updateBulkBar();
   }
